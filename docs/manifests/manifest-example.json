@@ -1,0 +1,23 @@
+{
+  "name": "KPI & Prescriptive Engine",
+  "id": "com.example.kpi",
+  "version": "1.0.0",
+  "api_version": "v1",
+  "capabilities": [
+    "analyzes_profit_trends",
+    "recommends_promotions"
+  ],
+  "permissions": [
+    "read:products",
+    "read:sales",
+    "send:message_bus"
+  ],
+  "db_requirements": [],
+  "dependencies": [],
+  "signed_by": null,
+  "upgrade_path": "v1 -> v2: add forecast table; migration included",
+  "metadata": {
+    "author": "Example Inc",
+    "description": "Rule-based KPI engine that suggests promotions and reorder alerts."
+  }
+}

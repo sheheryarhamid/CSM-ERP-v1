@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Module Manifest",
+  "type": "object",
+  "required": ["name", "id", "version", "api_version", "capabilities", "permissions"],
+  "properties": {
+    "name": { "type": "string", "minLength": 1 },
+    "id": { "type": "string", "pattern": "^[a-z0-9_.-]+$", "description": "Stable module identifier (reverse DNS style recommended)" },
+    "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+(-[A-Za-z0-9-.]+)?$" },
+    "api_version": { "type": "string" },
+    "capabilities": { "type": "array", "items": { "type": "string" } },
+    "permissions": { "type": "array", "items": { "type": "string" } },
+    "db_requirements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "table": { "type": "string" },
+          "columns": { "type": "array", "items": { "type": "string" } }
+        },
+        "required": ["table"]
+      }
+    },
+    "dependencies": { "type": "array", "items": { "type": "string" } },
+    "signed_by": { "type": ["string", "null"], "description": "Certificate fingerprint or null for unsigned (dev)" },
+    "upgrade_path": { "type": ["string", "null"] },
+    "metadata": { "type": "object", "additionalProperties": true }
+  },
+  "additionalProperties": false
+}

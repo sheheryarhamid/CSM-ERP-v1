@@ -1,0 +1,76 @@
+openapi: 3.0.3
+info:
+  title: Central ERP Hub - Unified Data API
+  version: '1.0.0'
+servers:
+  - url: https://api.example.local
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    MutualTLS:
+      type: mutualTLS
+  schemas:
+    Error:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+paths:
+  /auth/login:
+    post:
+      summary: Login and receive tokens
+      requestBody:
+        required: true
+      responses:
+        '200':
+          description: tokens
+  /modules:
+    get:
+      summary: List installed modules
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: module list
+    post:
+      summary: Install a module via manifest upload
+      security:
+        - BearerAuth: ["modules:install"]
+      responses:
+        '201':
+          description: installed
+  /api/health/clients:
+    get:
+      summary: Return summary of active sessions/clients
+      security:
+        - BearerAuth: ["admin:clients:view"]
+      responses:
+        '200':
+          description: clients summary
+  /v1/{resource}:
+    get:
+      summary: List resources (generic)
+      parameters:
+        - name: resource
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: list
+  /admin/backup/create:
+    post:
+      summary: Trigger backup
+      security:
+        - BearerAuth: ["admin:backup:create"]
+      responses:
+        '202':
+          description: started
+security:
+  - BearerAuth: []

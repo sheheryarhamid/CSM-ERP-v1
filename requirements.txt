@@ -1,0 +1,24 @@
+# Backend Python dependencies (recommended latest stable versions)
+fastapi
+uvicorn[standard]
+sqlalchemy
+alembic
+pydantic
+sqlmodel
+passlib[bcrypt]
+python-jose[cryptography]
+cryptography
+redis
+aioredis
+celery
+httpx
+pytest
+prometheus-client
+structlog
+python-dotenv
+# Manifest validator
+jsonschema
+# Optional helpers
+# (removed invalid package `alembic_autogenerate`) 
+
+# Note: pin versions in production (use a constraints file or pyproject.toml)
