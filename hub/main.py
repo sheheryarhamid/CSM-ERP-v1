@@ -18,11 +18,11 @@ import time
 # Metrics
 MET_TERMINATE_ATTEMPTS = Counter('hub_terminate_attempts_total', 'Terminate attempts')
 MET_TERMINATE_SUCCESS = Counter('hub_terminate_success_total', 'Terminate success')
-# Removed rate-limiter denied metric (no external rate-limiter in cleanup)
+MET_TERMINATE_DENIED = Counter('hub_terminate_denied_total', 'Terminate denied (auth/rate)')
 MET_AUDIT_EVENTS = Counter('hub_audit_events_total', 'Audit events written')
 MET_AUTH_FAILURES = Counter('hub_auth_failures_total', 'Authentication failures')
 
-# No external rate limiter in this simplified runtime.
+RATE_WINDOW_SECONDS = 60
 
 
 app = FastAPI(title="Central ERP Hub - Dev Skeleton")
@@ -90,6 +90,16 @@ async def terminate_client(session_id: str, request: Request, authorization: str
     if admin_token or jwt_secret:
         if not is_admin(authorization, x_admin_token):
             raise HTTPException(status_code=403, detail="admin credentials required")
+
+    # Rate limiting: allow `RATE_LIMIT_PER_MIN` requests per minute per client IP (default 60)
+    limit = int(os.getenv('RATE_LIMIT_PER_MIN', '60'))
+    try:
+        client_ip = (request.client and request.client.host) or 'unknown'
+    except Exception:
+        client_ip = 'unknown'
+
+    # Rate limiter removed in cleanup branch: allow all requests.
+    allowed = True
 
     # Metric: count terminate attempts
     MET_TERMINATE_ATTEMPTS.inc()
