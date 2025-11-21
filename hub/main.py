@@ -9,7 +9,6 @@ import os
 from .session_store import create_default_store
 from .audit import record_audit
 from .auth import is_admin
-from .limiter import RateLimiter
 import os
 from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
 from fastapi.responses import Response
@@ -19,14 +18,11 @@ import time
 # Metrics
 MET_TERMINATE_ATTEMPTS = Counter('hub_terminate_attempts_total', 'Terminate attempts')
 MET_TERMINATE_SUCCESS = Counter('hub_terminate_success_total', 'Terminate success')
-MET_TERMINATE_DENIED = Counter('hub_terminate_denied_total', 'Terminate denied (auth/rate)')
+# Removed rate-limiter denied metric (no external rate-limiter in cleanup)
 MET_AUDIT_EVENTS = Counter('hub_audit_events_total', 'Audit events written')
 MET_AUTH_FAILURES = Counter('hub_auth_failures_total', 'Authentication failures')
 
-RATE_WINDOW_SECONDS = 60
-
-# Rate limiter (Redis-backed when REDIS_URL is set, otherwise in-memory)
-limiter = RateLimiter(window_seconds=RATE_WINDOW_SECONDS)
+# No external rate limiter in this simplified runtime.
 
 
 app = FastAPI(title="Central ERP Hub - Dev Skeleton")
@@ -95,23 +91,15 @@ async def terminate_client(session_id: str, request: Request, authorization: str
         if not is_admin(authorization, x_admin_token):
             raise HTTPException(status_code=403, detail="admin credentials required")
 
-    # Rate limiting: allow `RATE_LIMIT_PER_MIN` requests per minute per client IP (default 60)
-    limit = int(os.getenv('RATE_LIMIT_PER_MIN', '60'))
-    try:
-        client_ip = (request.client and request.client.host) or 'unknown'
-    except Exception:
-        client_ip = 'unknown'
-
-    allowed = limiter.allow_request(client_ip, limit)
-    if not allowed:
-        MET_TERMINATE_DENIED.inc()
-        raise HTTPException(status_code=429, detail='rate limit exceeded')
-
+    # Metric: count terminate attempts
     MET_TERMINATE_ATTEMPTS.inc()
 
     ok = session_store.terminate_session(session_id)
     if not ok:
         raise HTTPException(status_code=404, detail="session not found")
+
+    # Mark success
+    MET_TERMINATE_SUCCESS.inc()
 
     # Audit the action
     try:
@@ -148,23 +136,8 @@ async def get_audit(request: Request, limit: int = 100):
         if not is_admin(auth_header, x_admin):
             raise HTTPException(status_code=403, detail="admin credentials required")
 
-    redis_url = os.getenv("REDIS_URL")
+    # Read audit events from file (file-only audit storage after cleanup)
     events = []
-    if redis_url:
-        try:
-            import redis
-            client = redis.from_url(redis_url, decode_responses=True)
-            raw = client.lrange("hub:audit", -limit, -1)
-            for item in raw:
-                try:
-                    events.append(json.loads(item))
-                except Exception:
-                    events.append({"raw": item})
-            return {"events": events}
-        except Exception:
-            pass
-
-    # Fallback to file
     path = os.path.join("logs", "audit.log")
     if os.path.exists(path):
         try:
