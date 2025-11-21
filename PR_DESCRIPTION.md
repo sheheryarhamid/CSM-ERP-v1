@@ -1,50 +1,46 @@
-Title: feat: Redis-backed rate limiter + Redis session store integration
+Title: chore: remove Redis runtime dependency and rate limiter (cleanup)
 
 Summary
 -------
-This PR introduces production-ready rate-limiting and session-store options, plus tests and CI improvements:
+This branch cleans up the runtime to remove the Redis dependency and the active rate-limiting behavior. The goals are:
 
-- Add a `RateLimiter` (`hub/limiter.py`) that prefers Redis (when `REDIS_URL` is configured) and falls back to a thread-safe in-memory implementation.
-- Wire the `RateLimiter` into the terminate endpoint (`POST /api/clients/{session_id}/terminate`) in `hub/main.py` and preserve Prometheus metrics instrumentation.
-- Ensure the session store uses Redis when `REDIS_URL` is present via the existing factory in `hub/session_store.py`.
-- Add integration tests for the Redis-backed limiter and session store: `tests/test_limiter_redis.py` and `tests/test_session_store_redis.py` (both skipped unless `REDIS_URL` is set).
-- Add a docs page `docs/limiter.md` describing limiter behavior and CI notes, and `docs/session_store.md` describing store selection.
-- Update CI workflow (`.github/workflows/ci.yml`) to run Redis as a service for integration tests so the Redis-backed tests can run in CI without docker-compose.
-- Add `.gitignore` and basic repo initialization (this branch contains the initial commit for the workspace changes).
+- Remove the Redis-backed runtime features to make the hub self-contained for development.
+- Remove active rate-limiting checks from `hub/main.py` and archive the limiter implementation.
+- Simplify auditing to file-only (`logs/audit.log`) and avoid runtime Redis for audit events.
+- Update docs and tests to reflect the simplified runtime. Redis integration tests are preserved but skipped and historical implementations remain in the backup branch.
 
-Why
----
-Using Redis for rate-limiting and sessions ensures correct behavior across multi-process and multi-host deployments. The in-memory fallbacks remain available for local development and quick testing. Integration tests and CI support make deployments safer.
+Key changes in this branch
+-------------------------
+
+- `hub/main.py`: Removed runtime rate-limit enforcement; endpoint behavior remains otherwise unchanged.
+- `hub/limiter.py`: Replaced with a placeholder to make accidental imports fail loudly; historical implementation preserved in history/backup.
+- `hub/session_store_clean.py`: `create_default_store()` now returns `InMemorySessionStore` unconditionally to avoid runtime Redis.
+- `hub/audit.py`: Audit now writes to `logs/audit.log` (file-only) and no longer attempts Redis writes at runtime.
+- Tests: rate-limit behavior test skipped and Redis integration tests remain skipped unless `REDIS_URL` is set.
+- Docs: `docs/limiter.md` and `docs/session_store.md` updated to mark the Redis-backed runtime features as archived and point to the backup branch for historical implementations.
 
 Testing
 -------
-- Unit test suite: `py -3 -m pytest -q` — all unit tests pass locally (`10 passed, 3 skipped` on my run). Integration tests are skipped locally unless `REDIS_URL` is set.
-- To run integration tests locally:
 
-```powershell
-# Start Redis in Docker
-docker run -d -p 6379:6379 --name hub-redis redis:7
-$env:REDIS_URL = 'redis://127.0.0.1:6379/0'
-py -3 -m pytest -q
-```
+- Unit test suite (local): `py -3 -m pytest -q` — current result: `9 passed, 4 skipped` on my run after the cleanup.
+- Frontend build: `npm ci && npm run build` — successful.
 
-CI notes
---------
-The CI workflow now starts Redis as a GitHub Actions service and runs the Redis-specific integration tests (the job `integration` sets `REDIS_URL=redis://localhost:6379/0`).
+Notes
+-----
+
+- The original feature work (Redis-backed limiter and session store) is preserved in the backup branch `backup/feature/redis-limiter-sessionstore-20251120-000740` in case you want to restore or rework it later.
 
 Files of interest
 -----------------
-- `hub/limiter.py` — Redis-backed sorted-set limiter + in-memory fallback
-- `hub/main.py` — termination endpoint now uses `limiter`
-- `hub/session_store.py` — RedisSessionStore available and selected when `REDIS_URL` is set
-- `tests/test_limiter_redis.py`, `tests/test_session_store_redis.py` — integration tests (skipped unless `REDIS_URL` present)
-- `docs/limiter.md`, `docs/session_store.md` — documentation
-- `.github/workflows/ci.yml` — CI integration job now runs Redis as a service
+
+- `hub/main.py`, `hub/limiter.py`, `hub/session_store_clean.py`, `hub/audit.py`
+- `tests/test_rate_limit_and_metrics.py` (skipped rate-limit behavior)
+- `docs/limiter.md`, `docs/session_store.md`
 
 Next steps
 ----------
-- Push the branch to your remote and open a PR: `git push -u origin feature/redis-limiter-sessionstore` then create a PR on GitHub.
-- Optionally: enable the Redis integration tests in CI by running the `integration` job on `push` or `workflow_dispatch` (already configured).
-- Consider adding session TTLs, cleanup jobs, or stronger identity/auth for limiter keys (e.g., per-session keys) in a follow-up.
 
-If you want, I can prepare a short PR description message for the GitHub UI (copy/paste), or open a draft PR if you provide the remote URL and allow pushing.
+- Open a PR from `chore/cleanup-features` → `main` to merge these cleanup changes. I can open a PR for you or provide copy/paste content for the GitHub UI.
+- Optionally delete the remote backup branch after you confirm it is no longer needed.
+
+If you want me to open the PR, say "open PR" and I will prepare the PR title/body and attempt to open it (I may need your GitHub token or `gh` CLI configured to create the PR automatically). Otherwise I will provide the PR body for you to paste.
