@@ -1,0 +1,386 @@
+openapi: 3.0.3
+info:
+  title: Central ERP Hub — Unified Data API
+  version: '1.0.0'
+  description: |
+    Unified Data API for the Central ERP Hub. Single gateway for modules to read/write
+    canonical entities (products, sales, customers, inventory) and to send messages
+    to the Hub message bus. Authentication uses OAuth2 client credentials with
+    fine-grained scopes.
+servers:
+  - url: https://api.example-hub.local
+    description: Local/On-prem Hub (adjust per deployment)
+security:
+  - oauth2: []
+components:
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.example-hub.local/oauth/token
+          scopes:
+            read:products: read product metadata
+            write:products: create/update/delete products
+            read:sales: read sales/transactions
+            write:sales: create sales records
+            read:inventory: read inventory data
+            write:inventory: adjust inventory
+            read:customers: read customer data
+            write:customers: create/update customers
+            send:message_bus: publish messages to the Hub message bus
+            admin: administrative actions (install modules, manage manifests)
+  schemas:
+    Pagination:
+      type: object
+      properties:
+        limit:
+          type: integer
+          example: 50
+        offset:
+          type: integer
+          example: 0
+    Product:
+      type: object
+      required: [id, name, sku, price_cents]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        sku:
+          type: string
+        description:
+          type: string
+        price_cents:
+          type: integer
+        currency:
+          type: string
+          example: PKR
+        active:
+          type: boolean
+          default: true
+    Sale:
+      type: object
+      required: [id, timestamp, total_cents, items]
+      properties:
+        id:
+          type: string
+          format: uuid
+        timestamp:
+          type: string
+          format: date-time
+        total_cents:
+          type: integer
+        currency:
+          type: string
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              product_id:
+                type: string
+              qty:
+                type: integer
+              unit_price_cents:
+                type: integer
+    Customer:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+          format: uuid
+        external_id:
+          type: string
+        segment:
+          type: string
+    InventoryItem:
+      type: object
+      properties:
+        product_id:
+          type: string
+        on_hand:
+          type: integer
+        reserved:
+          type: integer
+    ModuleManifest:
+      type: object
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+    MessageEnvelope:
+      type: object
+      properties:
+        from_module:
+          type: string
+        to_module:
+          type: string
+        action:
+          type: string
+        payload:
+          type: object
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+
+paths:
+  /products:
+    get:
+      summary: List products
+      security:
+        - oauth2: [read:products]
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+          description: Max items to return
+        - in: query
+          name: offset
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: A paginated list of products
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Product'
+                  total:
+                    type: integer
+    post:
+      summary: Create product
+      security:
+        - oauth2: [write:products]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Product'
+      responses:
+        '201':
+          description: Product created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+
+  /products/{product_id}:
+    parameters:
+      - name: product_id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Get product
+      security:
+        - oauth2: [read:products]
+      responses:
+        '200':
+          description: Product
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '404':
+          description: Not found
+    put:
+      summary: Update product
+      security:
+        - oauth2: [write:products]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Product'
+      responses:
+        '200':
+          description: Updated product
+    delete:
+      summary: Delete product
+      security:
+        - oauth2: [write:products]
+      responses:
+        '204':
+          description: Deleted
+
+  /sales:
+    get:
+      summary: List sales
+      security:
+        - oauth2: [read:sales]
+      parameters:
+        - in: query
+          name: from
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: to
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Sales list
+    post:
+      summary: Record a sale (creates ledger + inventory adjustments)
+      security:
+        - oauth2: [write:sales]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Sale'
+      responses:
+        '201':
+          description: Sale recorded
+
+  /inventory/items:
+    get:
+      summary: List inventory items
+      security:
+        - oauth2: [read:inventory]
+      responses:
+        '200':
+          description: Inventory
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InventoryItem'
+    put:
+      summary: Bulk adjust inventory (idempotent)
+      security:
+        - oauth2: [write:inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/InventoryItem'
+      responses:
+        '200':
+          description: Inventory updated
+
+  /customers:
+    get:
+      summary: List customers
+      security:
+        - oauth2: [read:customers]
+      responses:
+        '200':
+          description: Customer list
+    post:
+      summary: Create customer
+      security:
+        - oauth2: [write:customers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Customer'
+      responses:
+        '201':
+          description: Customer created
+
+  /sessions:
+    get:
+      summary: List active sessions
+      security:
+        - oauth2: [admin]
+      responses:
+        '200':
+          description: Sessions list
+    post:
+      summary: Create (or validate) a session token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                module:
+                  type: string
+                scopes:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '201':
+          description: Session token created
+
+  /modules:
+    get:
+      summary: List installed modules
+      security:
+        - oauth2: [admin]
+      responses:
+        '200':
+          description: Modules
+    post:
+      summary: Install a module (upload manifest)
+      security:
+        - oauth2: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModuleManifest'
+      responses:
+        '201':
+          description: Module installed
+
+  /messages:
+    post:
+      summary: Publish a message to the Hub message bus
+      security:
+        - oauth2: [send:message_bus]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageEnvelope'
+      responses:
+        '202':
+          description: Accepted for delivery
+
+  /health:
+    get:
+      summary: System health & metrics
+      responses:
+        '200':
+          description: OK
+
+externalDocs:
+  description: Implementation addendum
+  url: /docs/implementation-addendum.md
