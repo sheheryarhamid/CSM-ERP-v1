@@ -51,6 +51,35 @@ class LocalEncryptedBlobStore:
         st = os.stat(p)
         return {"id": blob_id, "size": st.st_size}
 
+    def get_plaintext_size(self, blob_id: str) -> int:
+        """Return the total plaintext size (in bytes) for the given blob by
+        streaming-through and summing decrypted chunk lengths. This is needed
+        to support HTTP Range responses where the client expects the plaintext
+        byte offsets.
+        """
+        p = self._path_for(blob_id)
+        if not os.path.exists(p):
+            raise BlobNotFound()
+
+        total = 0
+        with open(p, 'rb') as fh:
+            while True:
+                header = fh.read(12 + 4)
+                if not header or len(header) < 16:
+                    break
+                nonce = header[:12]
+                clen = struct.unpack('>I', header[12:16])[0]
+                ciphertext = fh.read(clen)
+                if len(ciphertext) != clen:
+                    raise RuntimeError('truncated blob')
+                try:
+                    plaintext = self.aesgcm.decrypt(nonce, ciphertext, None)
+                except Exception as e:
+                    raise RuntimeError('decryption failed') from e
+                total += len(plaintext)
+
+        return total
+
     def stream_blob(self, blob_id: str, chunk_size: int = 4096) -> Iterator[bytes]:
         """Stream decrypted blob bytes using per-chunk AES-GCM records."""
         p = self._path_for(blob_id)

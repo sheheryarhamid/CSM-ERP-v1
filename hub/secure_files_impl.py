@@ -1,13 +1,20 @@
 from fastapi import APIRouter, Request, HTTPException, Header
 from fastapi.responses import StreamingResponse
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Iterator
+
+from prometheus_client import Counter
 
 from .auth import is_admin
 from .audit import record_audit
 from .blob_store import get_default_store, BlobNotFound
 
 router = APIRouter()
+
+# Prometheus metrics (registered globally)
+MET_FILE_DOWNLOADS = Counter('hub_file_downloads_total', 'Total file download requests')
+MET_FILE_BYTES = Counter('hub_file_downloaded_bytes_total', 'Total bytes streamed for file downloads')
+MET_FILE_DOWNLOAD_FAILURES = Counter('hub_file_download_failures_total', 'Failed file download attempts')
 
 # Keep the same mock registry so UI can discover files in dev
 _MOCK_FILES = [
@@ -37,7 +44,17 @@ def _find(file_id: str):
 
 @router.get("/secure/files")
 async def list_files(request: Request):
-    return _MOCK_FILES
+    # require admin to list files in hardened mode
+    auth = request.headers.get("authorization")
+    x_admin = request.headers.get("x-admin-token")
+    if not is_admin(auth, x_admin):
+        raise HTTPException(status_code=403, detail="admin credentials required")
+
+    # do not expose any filesystem paths; return safe metadata only
+    return [
+        {"id": f["id"], "name": f["name"], "type": f["type"], "size_human": f.get("size_human"), "created_at": f.get("created_at")}
+        for f in _MOCK_FILES
+    ]
 
 
 @router.get("/secure/files/{file_id}/meta")
@@ -45,6 +62,11 @@ async def file_meta(file_id: str, request: Request):
     f = _find(file_id)
     if not f:
         raise HTTPException(status_code=404, detail="file not found")
+    auth = request.headers.get("authorization")
+    x_admin = request.headers.get("x-admin-token")
+    if not is_admin(auth, x_admin):
+        raise HTTPException(status_code=403, detail="admin credentials required")
+
     return {
         "id": f["id"],
         "name": f["name"],
@@ -59,6 +81,10 @@ async def file_preview(file_id: str, request: Request):
     f = _find(file_id)
     if not f:
         raise HTTPException(status_code=404, detail="file not found")
+    auth = request.headers.get("authorization")
+    x_admin = request.headers.get("x-admin-token")
+    if not is_admin(auth, x_admin):
+        raise HTTPException(status_code=403, detail="admin credentials required")
 
     if f["type"] == "sqlite":
         preview = "SQLite DB: tables=products,customers,sales — size approx " + f.get("size_human", "n/a")
@@ -82,11 +108,20 @@ async def file_download(file_id: str, request: Request, authorization: Optional[
 
     # Audit the download attempt
     actor = "admin"
+    client_ip = None
+    try:
+        client_ip = (request.client and request.client.host) or 'unknown'
+    except Exception:
+        client_ip = 'unknown'
+
     record_audit({
         "action": "file_download",
         "file_id": file_id,
         "by": actor,
+        "client_ip": client_ip,
     })
+
+    MET_FILE_DOWNLOADS.inc()
 
     try:
         store = get_default_store()
@@ -106,10 +141,92 @@ async def file_download(file_id: str, request: Request, authorization: Optional[
         return StreamingResponse(iter_bytes(), media_type='application/octet-stream')
 
     try:
-        stream = store.stream_blob(f["id"])
+        inner_stream = store.stream_blob(f["id"])
     except BlobNotFound:
+        MET_FILE_DOWNLOAD_FAILURES.inc()
         raise HTTPException(status_code=404, detail="file not found in blob store")
     except Exception:
+        MET_FILE_DOWNLOAD_FAILURES.inc()
         raise HTTPException(status_code=500, detail="error reading blob")
 
-    return StreamingResponse(stream, media_type='application/octet-stream')
+    # Support HTTP Range header for resumable/partial downloads
+    range_header = request.headers.get('range') or request.headers.get('Range')
+    if not range_header:
+        def counting_stream() -> Iterator[bytes]:
+            try:
+                for chunk in inner_stream:
+                    try:
+                        MET_FILE_BYTES.inc(len(chunk))
+                    except Exception:
+                        pass
+                    yield chunk
+            except Exception:
+                MET_FILE_DOWNLOAD_FAILURES.inc()
+                raise
+
+        return StreamingResponse(counting_stream(), media_type='application/octet-stream')
+
+    # Parse simple byte-range: bytes=<start>-<end?>
+    try:
+        if not range_header.startswith('bytes='):
+            raise ValueError('unsupported range unit')
+        rng = range_header[len('bytes='):].strip()
+        if '-' not in rng:
+            raise ValueError('invalid range')
+        s, e = rng.split('-', 1)
+        total_size = store.get_plaintext_size(f['id'])
+
+        if s == '':
+            # suffix range: last N bytes
+            last_n = int(e)
+            if last_n <= 0:
+                raise ValueError('invalid range')
+            start = max(0, total_size - last_n)
+            end = total_size - 1
+        else:
+            start = int(s)
+            end = int(e) if e != '' else total_size - 1
+
+        if start < 0 or end < start or start >= total_size:
+            # 416 Range Not Satisfiable
+            raise HTTPException(status_code=416, detail='range not satisfiable')
+
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=400, detail='invalid Range header')
+
+    # Create a stream that skips until `start` and yields up to `end`.
+    def ranged_stream() -> Iterator[bytes]:
+        sent = 0
+        skipped = 0
+        try:
+            for chunk in inner_stream:
+                if skipped + len(chunk) <= start:
+                    skipped += len(chunk)
+                    continue
+                # compute slice within chunk to emit
+                chunk_start = max(0, start - skipped)
+                chunk_end = min(len(chunk), end - skipped + 1)
+                to_send = chunk[chunk_start:chunk_end]
+                if to_send:
+                    try:
+                        MET_FILE_BYTES.inc(len(to_send))
+                    except Exception:
+                        pass
+                    yield to_send
+                    sent += len(to_send)
+                skipped += len(chunk)
+                if skipped > end:
+                    break
+        except Exception:
+            MET_FILE_DOWNLOAD_FAILURES.inc()
+            raise
+
+    content_length = end - start + 1
+    headers = {
+        'Content-Range': f'bytes {start}-{end}/{total_size}',
+        'Accept-Ranges': 'bytes',
+        'Content-Length': str(content_length),
+    }
+    return StreamingResponse(ranged_stream(), status_code=206, media_type='application/octet-stream', headers=headers)
