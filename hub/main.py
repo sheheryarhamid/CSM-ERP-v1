@@ -14,6 +14,7 @@ from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
 from fastapi.responses import Response
 from datetime import timedelta
 import time
+from . import secure_files
 
 # Metrics
 MET_TERMINATE_ATTEMPTS = Counter('hub_terminate_attempts_total', 'Terminate attempts')
@@ -26,6 +27,9 @@ RATE_WINDOW_SECONDS = 60
 
 
 app = FastAPI(title="Central ERP Hub - Dev Skeleton")
+
+# include secure file API (mock/stub for UI testing)
+app.include_router(secure_files.router, prefix='/api')
 
 # Initialize session store
 session_store = create_default_store()

@@ -54,7 +54,6 @@ class RedisSessionStore:
 
 
 # Factory to pick backend (Redis or in-memory)
-
 def create_default_store():
     # Always return the in-memory store for now.
     return InMemorySessionStore()
