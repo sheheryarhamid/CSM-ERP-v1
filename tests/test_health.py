@@ -41,12 +41,24 @@ def test_create_and_terminate_session():
         import os
         jwt_secret = os.getenv("ADMIN_JWT_SECRET")
         admin_token = os.getenv("ADMIN_TOKEN")
+        # Prefer minting a token via the helper if both ADMIN_TOKEN and ADMIN_JWT_SECRET are available.
         if jwt_secret and admin_token:
-            # mint a short-lived admin JWT via the helper endpoint
             tr = client.post("/api/ops/token", headers={"x-admin-token": admin_token})
             if tr.status_code == 200:
                 token = tr.json().get("access_token")
                 r = client.post(f"/api/clients/{sid}/terminate", headers={"Authorization": f"Bearer {token}"})
+        elif jwt_secret:
+            # If only ADMIN_JWT_SECRET is configured in CI, craft a JWT locally for the test.
+            try:
+                from jose import jwt
+                from datetime import datetime as _dt, timedelta, timezone as _tz
+                now = _dt.now(_tz.utc)
+                payload = {"sub": "admin", "role": "admin", "iat": int(now.timestamp()), "exp": int((now + timedelta(minutes=30)).timestamp())}
+                token = jwt.encode(payload, jwt_secret, algorithm="HS256")
+                r = client.post(f"/api/clients/{sid}/terminate", headers={"Authorization": f"Bearer {token}"})
+            except Exception:
+                # Fall through; assertion below will catch the failure.
+                pass
 
     assert r.status_code == 200
 
