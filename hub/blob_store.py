@@ -4,6 +4,8 @@ from typing import Iterator, Optional
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
+from .key_provider import get_key_bytes
+
 # Simple local encrypted blob store implementation for dev/testing.
 # Chunked envelope format (streaming-friendly): repeated records of
 # [nonce(12)][ciphertext_len(4, big-endian)][ciphertext+tag]
@@ -19,12 +21,13 @@ class BlobNotFound(Exception):
 class LocalEncryptedBlobStore:
     def __init__(self, base_dir: Optional[str] = None, key_hex: Optional[str] = None):
         self.base_dir = base_dir or BASE_DIR
-        key_hex = key_hex or os.environ.get("BLOB_KEY")
-        if not key_hex:
-            raise RuntimeError("BLOB_KEY not set for LocalEncryptedBlobStore")
-        self.key = bytes.fromhex(key_hex)
-        if len(self.key) not in (16, 24, 32):
-            raise RuntimeError("BLOB_KEY must be 16/24/32 bytes (hex)")
+        # Use the key provider abstraction so we can swap in KMS/DPAPI later
+        if key_hex:
+            key = bytes.fromhex(key_hex)
+        else:
+            key = get_key_bytes()
+
+        self.key = key
         self.aesgcm = AESGCM(self.key)
 
     def _path_for(self, blob_id: str) -> str:
