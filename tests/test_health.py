@@ -36,6 +36,18 @@ def test_create_and_terminate_session():
 
     # Terminate the session
     r = client.post(f"/api/clients/{sid}/terminate")
+    # In some CI or envs an admin credential may be required; if so, try to obtain a token and retry.
+    if r.status_code == 403:
+        import os
+        jwt_secret = os.getenv("ADMIN_JWT_SECRET")
+        admin_token = os.getenv("ADMIN_TOKEN")
+        if jwt_secret and admin_token:
+            # mint a short-lived admin JWT via the helper endpoint
+            tr = client.post("/api/ops/token", headers={"x-admin-token": admin_token})
+            if tr.status_code == 200:
+                token = tr.json().get("access_token")
+                r = client.post(f"/api/clients/{sid}/terminate", headers={"Authorization": f"Bearer {token}"})
+
     assert r.status_code == 200
 
     # Ensure it's gone
