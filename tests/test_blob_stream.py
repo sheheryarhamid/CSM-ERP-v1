@@ -30,7 +30,7 @@ client = TestClient(app)
 
 def test_download_blob():
     # call download with legacy x-admin-token
-    resp = client.get('/api/secure/files/file-1/download', headers={ 'x-admin-token': 'dev-admin-token' }, stream=True)
+    resp = client.get('/api/secure/files/file-1/download', headers={ 'x-admin-token': 'dev-admin-token' })
     assert resp.status_code == 200
     data = resp.content
     assert b'test backup' in data
