@@ -14,7 +14,7 @@ from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
 from fastapi.responses import Response
 from datetime import timedelta
 import time
-from . import secure_files
+from . import secure_files_impl as secure_files
 
 # Metrics
 MET_TERMINATE_ATTEMPTS = Counter('hub_terminate_attempts_total', 'Terminate attempts')
