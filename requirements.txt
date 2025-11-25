@@ -6,7 +6,7 @@ alembic
 pydantic
 sqlmodel
 passlib[bcrypt]
-python-jose[cryptography]
+PyJWT
 cryptography
 redis
 aioredis
@@ -19,6 +19,8 @@ python-dotenv
 # Manifest validator
 jsonschema
 # Optional helpers
+# Explicitly pin brotli to avoid known decompression vulnerabilities (see reports/pip_audit.json)
+brotli>=1.2.0
 # (removed invalid package `alembic_autogenerate`) 
 
 # Note: pin versions in production (use a constraints file or pyproject.toml)

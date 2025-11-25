@@ -1,0 +1,51 @@
+name: Security - pip-audit
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - feat/**
+
+jobs:
+  pip-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pip-audit
+
+      - name: Run pip-audit
+        run: |
+          mkdir -p reports
+          pip-audit -f json -o reports/pip_audit_ci.json
+
+      - name: Upload pip-audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: pip-audit-report
+          path: reports/pip_audit_ci.json
+
+      - name: Fail on vulnerabilities
+        run: |
+          # Fail if pip-audit reports any vulnerabilities
+          python - <<'PY'
+            import json,sys
+            with open('reports/pip_audit_ci.json') as f:
+                j=json.load(f)
+            vulns=[d for d in j.get('dependencies',[]) if d.get('vulns')]
+            if vulns:
+                print('Found vulnerabilities:', vulns)
+                sys.exit(2)
+            print('No vulnerabilities found')
+          PY

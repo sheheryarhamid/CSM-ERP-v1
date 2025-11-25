@@ -49,7 +49,7 @@ def test_jwt_admin_rbac(tmp_path, monkeypatch):
     monkeypatch.setenv("ADMIN_JWT_SECRET", "jwtsecret")
 
     # create JWT
-    from jose import jwt
+    import jwt
 
     token = jwt.encode({"role": "admin"}, "jwtsecret", algorithm="HS256")
 
