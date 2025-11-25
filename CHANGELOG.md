@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.3.0] - 2025-11-26
+- Security: replaced `python-jose` with `PyJWT` to remove `python-ecdsa` transitive dependency (remediates CVE/GHSA timing issue).
+- Security: pinned `brotli>=1.2.0` to address compression-related CVE.
+- CI: added `security-pip-audit` workflow running `pip-audit` on PRs/pushes.
+- CI: added `ci-tests` workflow to run unit tests and `pylint` on PRs/pushes.
+- Feature: secure blob streaming, DPAPI key provider, and frontend streaming consumer (implementation on `feat/secure-blob-stream`).
+
+Notes:
+- See `docs/secure-blob-stream.md` for operational details and key-rotation guidance.
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
 ## [1.3.0] - 2025-11-25
 ### Added
 - Secure blob streaming with chunked AES-GCM envelope format and Range support.
