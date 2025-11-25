@@ -9,7 +9,9 @@ import os
 from .session_store import create_default_store
 from .audit import record_audit
 from .auth import is_admin
+import logging
 import os
+import jwt
 from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
 from fastapi.responses import Response
 from datetime import timedelta
@@ -27,6 +29,8 @@ RATE_WINDOW_SECONDS = 60
 
 
 app = FastAPI(title="Central ERP Hub - Dev Skeleton")
+
+logger = logging.getLogger(__name__)
 
 # include secure file API (mock/stub for UI testing)
 app.include_router(secure_files.router, prefix='/api')
@@ -124,7 +128,7 @@ async def terminate_client(session_id: str, request: Request, authorization: str
         })
     except Exception:
         # auditing is best-effort; don't fail the request on audit error
-        pass
+        logger.debug("record_audit failed on terminate_client: %s", exc_info=True)
 
     return {"status": "terminated", "session_id": session_id}
 
@@ -163,7 +167,7 @@ async def get_audit(request: Request, limit: int = 100):
                 except Exception:
                     events.append({"raw": ln.strip()})
         except Exception:
-            pass
+            logger.debug("Failed reading audit log file %s: %s", path, exc_info=True)
 
     return {"events": events}
 
@@ -186,7 +190,6 @@ async def mint_admin_token(x_admin_token: str | None = Header(None)):
 
     # create a token with role=admin
     try:
-        from jose import jwt
         from datetime import timedelta
         from datetime import datetime as _dt
 

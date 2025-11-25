@@ -11,6 +11,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    # Redis is provided here for optional local development and legacy integration
+    # tests, but the Hub runtime has been cleaned up to not require Redis.
+    # Keep this service in compose for developers who still want to run Redis.
 
   db:
     image: postgres:15-alpine

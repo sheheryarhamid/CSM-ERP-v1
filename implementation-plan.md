@@ -1,4 +1,4 @@
-# Central ERP Hub — Implementation Plan
+ins# Central ERP Hub — Implementation Plan
 
 Version: 1.0 | Created: November 19, 2025 | Owner: Sheheryar
 
@@ -24,7 +24,7 @@ Purpose: Turn the Master Blueprint into a concise, actionable implementation pla
 - API layer: Python (FastAPI) — exposes Unified Data API and admin endpoints.
 - Core services: Auth, RBAC, Audit Logger, Module Manager, Env Manager, Backup Service.
 - DB Backends: SQLite (Standalone), MySQL (LAN), PostgreSQL (Cloud). Canonical schema in repo.
-- Session/Message layer: Redis (session store + Redis Streams for lightweight message bus). Option to swap to RabbitMQ or NATS in larger deployments.
+- Session/Message layer: Optional: Redis (session store + Redis Streams for lightweight message bus). Option to swap to RabbitMQ or NATS in larger deployments.
 - Module runtime: containerized or isolated processes; optional WASM sandbox for 3rd-party modules.
 - Frontend: React (single-page app). Minimal JS business logic; all heavy logic on backend.
 
@@ -38,8 +38,8 @@ Diagram (conceptual): Hub (FastAPI) ← Module Layer (separate containers/proces
 - Auth: OAuth2 / JWT (python-jose) for tokens; optional session cookies for UI
 - Password hashing: Passlib (bcrypt or argon2)
 - Secrets/crypto: cryptography (for key management), integration adapters for KMS (AWS/Azure/GCP) as needed
-- Message queue: Redis Streams (primary) + Redis pub/sub for simple messages; Celery or RQ as background job runner (Celery if RabbitMQ/Redis needed)
-- Caching / sessions: Redis
+- Message queue: Optional: Redis Streams (dev) + Redis pub/sub for simple messages; Celery or RQ as background job runner (Celery if RabbitMQ/Redis needed)
+- Caching / sessions: Optional: Redis (dev)
 - Task scheduling: APScheduler or Celery beat
 - Serialization & validation: Pydantic
 - Containerization: Dockerfiles for Hub and modules

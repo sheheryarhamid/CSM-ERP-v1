@@ -4,12 +4,15 @@ from datetime import datetime, timezone
 from typing import Optional, Iterator
 
 from prometheus_client import Counter
+import logging
 
 from .auth import is_admin
 from .audit import record_audit
 from .blob_store import get_default_store, BlobNotFound
 
 router = APIRouter()
+
+logger = logging.getLogger(__name__)
 
 # Prometheus metrics (registered globally)
 MET_FILE_DOWNLOADS = Counter('hub_file_downloads_total', 'Total file download requests')
@@ -157,8 +160,8 @@ async def file_download(file_id: str, request: Request, authorization: Optional[
                 for chunk in inner_stream:
                     try:
                         MET_FILE_BYTES.inc(len(chunk))
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug("MET_FILE_BYTES.inc failed: %s", e)
                     yield chunk
             except Exception:
                 MET_FILE_DOWNLOAD_FAILURES.inc()
@@ -212,8 +215,8 @@ async def file_download(file_id: str, request: Request, authorization: Optional[
                 if to_send:
                     try:
                         MET_FILE_BYTES.inc(len(to_send))
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug("MET_FILE_BYTES.inc failed during ranged stream: %s", e)
                     yield to_send
                     sent += len(to_send)
                 skipped += len(chunk)
