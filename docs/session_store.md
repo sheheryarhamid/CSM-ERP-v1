@@ -1,19 +1,17 @@
 # Session Store
 
-The Hub supports two session store implementations:
+The Hub currently runs with an in-memory session store by default to keep development self-contained.
 
 - `InMemorySessionStore`: a development-only, process-local store. Suitable for local testing and single-process servers. Data is lost on process restart.
-- `RedisSessionStore`: a Redis-backed store that persists session JSON blobs and a set of active session IDs. Use this for multi-process deployments and production.
+
+Archived / removed
+
+- The Redis-backed `RedisSessionStore` runtime selection was removed during cleanup to avoid a hard runtime dependency on Redis in mainline branches. Historical Redis-backed implementations and integration tests are preserved in the repository history and in the backup branch `backup/feature/redis-limiter-sessionstore-20251120-000740`.
 
 Selection
 
-- The factory `create_default_store()` in `hub/session_store.py` will return a `RedisSessionStore` when the `REDIS_URL` environment variable is set and Redis is reachable. Otherwise it falls back to `InMemorySessionStore`.
-
-Configuration
-
-- `REDIS_URL` — set to a Redis connection URL, e.g. `redis://127.0.0.1:6379/0`.
+- The factory `create_default_store()` in `hub/session_store_clean.py` now always returns an `InMemorySessionStore`.
 
 Notes
 
-- The Redis store uses JSON blobs and a Redis set `hub:sessions` as an index. It's intentionally simple for the MVP; production deployments may want to store structured data or use TTLs/expirations depending on session lifecycle policies.
-- A lightweight integration test `tests/test_session_store_redis.py` is included and runs only when `REDIS_URL` is set (CI runs Redis as a service for integration tests).
+- If you require a Redis-backed store for production, reintroduce `RedisSessionStore` from the backup branch or implement a new production-grade store. Add CI integration to run Redis during integration tests if you want to validate multi-process behavior automatically.

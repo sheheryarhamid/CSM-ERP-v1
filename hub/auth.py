@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 def _verify_jwt(token: str, secret: str) -> Optional[dict]:
     try:
-        from jose import jwt
+        import jwt
 
         payload = jwt.decode(token, secret, algorithms=["HS256"])
         return payload
