@@ -9,6 +9,12 @@ Contents
 - Backup & disaster recovery notes
 - Troubleshooting
 
+Improvements:
+- Plaintext size sidecar: the blob store now writes a `.meta` sidecar file (`<blob>.meta`) containing JSON `{ "plaintext_size": <int> }` when blobs are created. This avoids an expensive decrypt-while-counting step for HTTP Range requests. If the sidecar is missing the store falls back to stream-decrypting to compute size.
+
+Frontend memory note:
+- The `SecureFileViewer` currently accumulates chunks in memory and assembles a `Blob` before triggering a client download. For very large files this may exhaust browser memory. Consider integrating `streamSaver.js` or writing to an IndexedDB-based writable stream to support truly large (>100MB) downloads without buffering the entire file in memory.
+
 1. Key Providers
 
 - DPAPI (Windows): The Hub supports a DPAPI-protected key payload provided via `BLOB_KEY_DPAPI` (base64) or `BLOB_KEY_DPAPI_FILE` (path to file). On Windows installations this is the recommended developer/installer mechanism for keeping the AES key off-disk in plaintext. The runtime uses CryptUnprotectData to unseal the key.

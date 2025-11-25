@@ -1,6 +1,7 @@
 import os
 import struct
 from typing import Iterator, Optional
+import json
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
@@ -60,7 +61,19 @@ class LocalEncryptedBlobStore:
         p = self._path_for(blob_id)
         if not os.path.exists(p):
             raise BlobNotFound()
+        # Fast path: read sidecar metadata if available to avoid full decryption
+        meta_path = p + '.meta'
+        if os.path.exists(meta_path):
+            try:
+                with open(meta_path, 'r', encoding='utf-8') as mf:
+                    m = json.load(mf)
+                    if isinstance(m.get('plaintext_size'), int):
+                        return m['plaintext_size']
+            except Exception:
+                # ignore and fall back to scanning
+                pass
 
+        # Fallback: stream-decrypt to compute plaintext size (expensive for large blobs)
         total = 0
         with open(p, 'rb') as fh:
             while True:
@@ -124,6 +137,15 @@ class LocalEncryptedBlobStore:
                 fh.write(struct.pack('>I', len(ciphertext)))
                 fh.write(ciphertext)
                 idx = end
+
+        # Write sidecar metadata to speed up size lookups (plaintext length)
+        try:
+            meta = {"plaintext_size": len(data)}
+            with open(p + '.meta', 'w', encoding='utf-8') as mf:
+                json.dump(meta, mf)
+        except Exception:
+            # metadata write is best-effort
+            pass
 
 
 def get_default_store() -> LocalEncryptedBlobStore:
