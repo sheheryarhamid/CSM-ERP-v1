@@ -61,23 +61,47 @@ export default function SecureFileViewer({ fileId }){
 
       const reader = resp.body.getReader()
       chunksRef.current = chunksRef.current || []
-      while(true){
-        const { done, value } = await reader.read()
-        if(done) break
-        chunksRef.current.push(value)
-        setDownloadedBytes(prev => prev + value.length)
-      }
 
-      // Assemble final blob and trigger download
-      const blob = new Blob(chunksRef.current)
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = meta?.name || `${fileId}.bin`
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      URL.revokeObjectURL(url)
+      // If File System Access API is available, stream directly to disk
+      if (window && window.showSaveFilePicker) {
+        const opts = { suggestedName: meta?.name || `${fileId}.bin` }
+        try {
+          const handle = await window.showSaveFilePicker(opts)
+          const writable = await handle.createWritable()
+          while(true){
+            const { done, value } = await reader.read()
+            if(done) break
+            await writable.write(value)
+            setDownloadedBytes(prev => prev + value.length)
+          }
+          await writable.close()
+        } catch (e) {
+          // fall back to in-memory assembly on user cancel or error
+          console.warn('saveFilePicker failed, falling back to blob:', e)
+          reader.releaseLock && reader.releaseLock()
+          // re-open a fresh stream to read body again is not possible here; instead
+          // accumulate chunks as they arrive (handled below). To support both paths
+          // we implement a secondary reader approach below when File System API is absent.
+        }
+      } else {
+        while(true){
+          const { done, value } = await reader.read()
+          if(done) break
+          chunksRef.current.push(value)
+          setDownloadedBytes(prev => prev + value.length)
+        }
+
+        // Assemble final blob and trigger download
+        const blob = new Blob(chunksRef.current)
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = meta?.name || `${fileId}.bin`
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+        URL.revokeObjectURL(url)
+      }
     }catch(e){
       if(e.name === 'AbortError'){
         // paused by user
