@@ -1,3 +1,9 @@
+"""Local encrypted blob store (chunked AES-GCM) used for secure streaming.
+
+Each blob file contains a sequence of encrypted records so callers can
+stream-decrypt without loading the whole file into memory.
+"""
+
 import os
 import struct
 from typing import Iterator, Optional
@@ -6,12 +12,6 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.exceptions import InvalidTag
 
 from hub.key_provider import get_key_bytes
-
-"""Local encrypted blob store (chunked AES-GCM) used for secure streaming.
-
-Each blob file contains a sequence of encrypted records so callers can
-stream-decrypt without loading the whole file into memory.
-"""
 
 # Simple local encrypted blob store implementation for dev/testing.
 # Chunked envelope format (streaming-friendly): repeated records of
