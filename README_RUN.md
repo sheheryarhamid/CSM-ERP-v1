@@ -39,17 +39,7 @@ Run full stack locally with Docker Compose (Redis + Postgres + app):
 
 ```powershell
 # start the stack (Docker Desktop required)
-docker compose up -d
+This run-guide was consolidated into `docs/user_guide.md`.
 
-# stop the stack
+Please refer to `docs/user_guide.md` for updated, canonical run instructions.
 docker compose down
-```
-
-Notes:
-- The `app` service mounts the repository and installs `requirements.txt` inside the container on start. If you prefer not to use Docker, start the backend locally with `py -3 -m uvicorn hub.main:app --reload --host 0.0.0.0 --port 8000` and set `REDIS_URL` in your shell when connecting to a running Redis instance.
-py -3 -m pip install -r requirements.txt
-py -3 -m pytest -q
-```
-
-Troubleshooting:
-- If the frontend cannot access the backend due to CORS or different ports, either configure Vite proxy in `frontend/vite.config.js` or enable CORS in the FastAPI app for development by adding `fastapi.middleware.cors.CORSMiddleware`.

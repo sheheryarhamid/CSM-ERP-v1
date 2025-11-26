@@ -1,32 +1,31 @@
 """Application entrypoint and admin/dev helper routes for the Hub."""
 
 import json
+import logging
 import os
 import time
-import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from pydantic import BaseModel
-from fastapi import FastAPI, HTTPException, Header, Request
+import jwt
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
-
-import jwt
 from jwt import PyJWTError
-from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, generate_latest
+from pydantic import BaseModel
 
-from .session_store import create_default_store
+from . import secure_files_impl as secure_files
 from .audit import record_audit
 from .auth import is_admin
-from . import secure_files_impl as secure_files
+from .session_store import create_default_store
 
 # Metrics
-MET_TERMINATE_ATTEMPTS = Counter('hub_terminate_attempts_total', 'Terminate attempts')
-MET_TERMINATE_SUCCESS = Counter('hub_terminate_success_total', 'Terminate success')
-MET_TERMINATE_DENIED = Counter('hub_terminate_denied_total', 'Terminate denied (auth/rate)')
-MET_AUDIT_EVENTS = Counter('hub_audit_events_total', 'Audit events written')
-MET_AUTH_FAILURES = Counter('hub_auth_failures_total', 'Authentication failures')
+MET_TERMINATE_ATTEMPTS = Counter("hub_terminate_attempts_total", "Terminate attempts")
+MET_TERMINATE_SUCCESS = Counter("hub_terminate_success_total", "Terminate success")
+MET_TERMINATE_DENIED = Counter("hub_terminate_denied_total", "Terminate denied (auth/rate)")
+MET_AUDIT_EVENTS = Counter("hub_audit_events_total", "Audit events written")
+MET_AUTH_FAILURES = Counter("hub_auth_failures_total", "Authentication failures")
 
 RATE_WINDOW_SECONDS = 60
 
@@ -37,7 +36,7 @@ app = FastAPI(title="Central ERP Hub - Dev Skeleton")
 logger = logging.getLogger(__name__)
 
 # include secure file API (mock/stub for UI testing)
-app.include_router(secure_files.router, prefix='/api')
+app.include_router(secure_files.router, prefix="/api")
 
 # Initialize session store
 session_store = create_default_store()
@@ -56,7 +55,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 class Session(BaseModel):
+    """Model representing a client session returned by the dev helper."""
     session_id: str
     user: str
     role: str
@@ -67,12 +68,25 @@ class Session(BaseModel):
     start_time: datetime | None = None
     last_activity: datetime | None = None
 
+
+class ClientCreate(BaseModel):
+    """Payload model for client creation helper endpoint."""
+    user: str = "anonymous"
+    role: str = "Viewer"
+    device: str | None = None
+    store: str | None = None
+    module: str | None = None
+    connection_type: str | None = None
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
 
+
 @app.get("/api/health/clients")
 async def clients():
+    """Return current active session summary for development/testing."""
     # Mock data for the skeleton. Replace with real session registry in implementation.
     # Use timezone-aware UTC datetimes to avoid deprecation warnings.
     sessions = session_store.list_sessions()
@@ -88,31 +102,42 @@ async def clients():
 
 
 @app.post("/api/clients/create")
-async def create_client(user: str = "anonymous", role: str = "Viewer", device: str | None = None, store: str | None = None, module: str | None = None, connection_type: str | None = None):
-    """Dev helper: create a session (not for production). Returns created session."""
-    s = session_store.create_session(user=user, role=role, device=device, store=store, module=module, connection_type=connection_type)
+async def create_client(request: Request):
+    """Dev helper: create a session (not for production).
+
+    Accepts either a JSON body or query parameters for convenience in tests.
+    """
+    # Try to read JSON body if provided, otherwise fall back to query params
+    body = {}
+    try:
+        body = await request.json()
+    except (ValueError, TypeError):
+        # not JSON or no body provided
+        body = {}
+
+    params = dict(request.query_params)
+    merged = {**body, **params}
+    payload = ClientCreate(**merged)
+
+    # Pass the payload object directly to the store which accepts a single spec.
+    s = session_store.create_session(payload)
     return s
 
 
 @app.post("/api/clients/{session_id}/terminate")
-async def terminate_client(session_id: str, request: Request, authorization: str | None = Header(None), x_admin_token: str | None = Header(None)):
+async def terminate_client(session_id: str, request: Request):
+    """Terminate a session (dev helper).
+
+    Reads any admin credentials from request headers and enforces RBAC if configured.
+    """
     # Enforce admin RBAC only if an admin mechanism is configured.
     admin_token = os.getenv("ADMIN_TOKEN")
     jwt_secret = os.getenv("ADMIN_JWT_SECRET")
     if admin_token or jwt_secret:
-        if not is_admin(authorization, x_admin_token):
+        auth_header = request.headers.get("authorization")
+        x_admin = request.headers.get("x-admin-token")
+        if not is_admin(auth_header, x_admin):
             raise HTTPException(status_code=403, detail="admin credentials required")
-
-    # Rate limiting: allow `RATE_LIMIT_PER_MIN` requests per minute per client IP (default 60)
-    limit = int(os.getenv('RATE_LIMIT_PER_MIN', '60'))
-    try:
-        client_ip = (request.client and request.client.host) or 'unknown'
-    except AttributeError as e:
-        logger.debug("Unable to read client IP: %s", e)
-        client_ip = 'unknown'
-
-    # Rate limiter removed in cleanup branch: allow all requests.
-    allowed = True
 
     # Metric: count terminate attempts
     MET_TERMINATE_ATTEMPTS.inc()
@@ -124,21 +149,16 @@ async def terminate_client(session_id: str, request: Request, authorization: str
     # Mark success
     MET_TERMINATE_SUCCESS.inc()
 
-    # Audit the action
+    # Audit the action (best-effort)
     try:
-        record_audit({
-            "action": "terminate_session",
-            "session_id": session_id,
-            "by": "admin",
-        })
-    except Exception as e:
-        # auditing is best-effort; don't fail the request on audit error
+        record_audit({"action": "terminate_session", "session_id": session_id, "by": "admin"})
+    except OSError as e:
         logger.debug("record_audit failed on terminate_client: %s", e)
 
     return {"status": "terminated", "session_id": session_id}
 
 
-@app.get('/metrics')
+@app.get("/metrics")
 async def metrics():
     """Expose Prometheus metrics."""
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)

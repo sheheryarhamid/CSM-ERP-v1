@@ -4,9 +4,9 @@ This module provides a minimal, durable audit sink used during development
 and for environments where external audit services are not configured.
 """
 
-import os
 import json
 import logging
+import os
 from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
@@ -34,5 +34,6 @@ def record_audit(event: dict) -> None:
         path = os.path.join("logs", "audit.log")
         with open(path, "a", encoding="utf-8") as fh:
             fh.write(json.dumps(event_copy, ensure_ascii=False) + "\n")
-    except OSError as e:
-        logger.exception("Failed writing audit to file: %s", e)
+    except OSError:
+        # audit must not raise in the normal request path; log and continue
+        logger.exception("Failed to write audit event")
