@@ -58,6 +58,83 @@ def _find(file_id: str):
     return None
 
 
+def _get_client_ip(request: Request) -> str:
+    """Safely return client IP or 'unknown' when unavailable."""
+    try:
+        return (request.client and request.client.host) or 'unknown'
+    except AttributeError as e:
+        logger.debug("Unable to read client IP: %s", e)
+        return 'unknown'
+
+
+def _parse_range_header(range_header: str, total_size: int) -> tuple[int, int]:
+    """Parse a simple bytes range header `bytes=<start>-<end>`.
+
+    Returns (start, end) inclusive, or raises ValueError for invalid input.
+    """
+    if not range_header.startswith('bytes='):
+        raise ValueError('unsupported range unit')
+    rng = range_header[len('bytes='):].strip()
+    if '-' not in rng:
+        raise ValueError('invalid range')
+    s, e = rng.split('-', 1)
+    if s == '':
+        # suffix range: last N bytes
+        last_n = int(e)
+        if last_n <= 0:
+            raise ValueError('invalid range')
+        start = max(0, total_size - last_n)
+        end = total_size - 1
+    else:
+        start = int(s)
+        end = int(e) if e != '' else total_size - 1
+
+    if start < 0 or end < start or start >= total_size:
+        raise ValueError('range not satisfiable')
+    return start, end
+
+
+def _make_counting_stream(inner_stream: Iterator[bytes]) -> Iterator[bytes]:
+    try:
+        for chunk in inner_stream:
+            try:
+                MET_FILE_BYTES.inc(len(chunk))
+            except (TypeError, ValueError) as e:
+                logger.debug("MET_FILE_BYTES.inc failed: %s", e)
+            yield chunk
+    except (RuntimeError, OSError) as e:
+        MET_FILE_DOWNLOAD_FAILURES.inc()
+        logger.exception("Error during streaming: %s", e)
+        raise
+
+
+def _make_ranged_stream(inner_stream: Iterator[bytes], start: int, end: int) -> Iterator[bytes]:
+    sent = 0
+    skipped = 0
+    try:
+        for chunk in inner_stream:
+            if skipped + len(chunk) <= start:
+                skipped += len(chunk)
+                continue
+            chunk_start = max(0, start - skipped)
+            chunk_end = min(len(chunk), end - skipped + 1)
+            to_send = chunk[chunk_start:chunk_end]
+            if to_send:
+                try:
+                    MET_FILE_BYTES.inc(len(to_send))
+                except (TypeError, ValueError) as e:
+                    logger.debug("MET_FILE_BYTES.inc failed during ranged stream: %s", e)
+                yield to_send
+                sent += len(to_send)
+            skipped += len(chunk)
+            if skipped > end:
+                break
+    except (RuntimeError, OSError) as e:
+        MET_FILE_DOWNLOAD_FAILURES.inc()
+        logger.exception("Error during ranged streaming: %s", e)
+        raise
+
+
 @router.get("/secure/files")
 async def list_files(request: Request):
     # require admin to list files in hardened mode
@@ -133,13 +210,7 @@ async def file_download(file_id: str, request: Request, authorization: Optional[
 
     # Audit the download attempt
     actor = "admin"
-    client_ip = None
-    try:
-        client_ip = (request.client and request.client.host) or 'unknown'
-    except AttributeError as e:
-        logger.debug("Unable to read client IP: %s", e)
-        client_ip = 'unknown'
-
+    client_ip = _get_client_ip(request)
     record_audit({
         "action": "file_download",
         "file_id": file_id,
@@ -183,97 +254,27 @@ async def file_download(file_id: str, request: Request, authorization: Optional[
     # Support HTTP Range header for resumable/partial downloads
     range_header = request.headers.get('range') or request.headers.get('Range')
     if not range_header:
-        def counting_stream() -> Iterator[bytes]:
-            try:
-                for chunk in inner_stream:
-                    try:
-                        MET_FILE_BYTES.inc(len(chunk))
-                    except (TypeError, ValueError) as e:
-                        logger.debug(
-                            "MET_FILE_BYTES.inc failed: %s",
-                            e,
-                        )
-                    yield chunk
-            except (RuntimeError, OSError) as e:
-                MET_FILE_DOWNLOAD_FAILURES.inc()
-                logger.exception("Error during streaming: %s", e)
-                raise
-
-        return StreamingResponse(counting_stream(), media_type='application/octet-stream')
+        return StreamingResponse(_make_counting_stream(inner_stream), media_type='application/octet-stream')
 
     # Parse simple byte-range: bytes=<start>-<end?>
     try:
-        if not range_header.startswith('bytes='):
-            raise ValueError('unsupported range unit')
-        rng = range_header[len('bytes='):].strip()
-        if '-' not in rng:
-            raise ValueError('invalid range')
-        s, e = rng.split('-', 1)
         total_size = store.get_plaintext_size(f['id'])
-
-        if s == '':
-            # suffix range: last N bytes
-            last_n = int(e)
-            if last_n <= 0:
-                raise ValueError('invalid range')
-            start = max(0, total_size - last_n)
-            end = total_size - 1
-        else:
-            start = int(s)
-            end = int(e) if e != '' else total_size - 1
-
-        if start < 0 or end < start or start >= total_size:
-            # 416 Range Not Satisfiable
-            raise HTTPException(status_code=416, detail='range not satisfiable')
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        # For parsing errors surface a client 400; keep the original exception debug info.
+        start, end = _parse_range_header(range_header, total_size)
+    except ValueError as e:
+        # translate parsing/validation errors into HTTP responses
         logger.debug("Invalid Range header: %s", e)
         raise HTTPException(status_code=400, detail='invalid Range header')
 
     # Create a stream that skips until `start` and yields up to `end`.
-    def ranged_stream() -> Iterator[bytes]:
-        sent = 0
-        skipped = 0
-        try:
-            for chunk in inner_stream:
-                if skipped + len(chunk) <= start:
-                    skipped += len(chunk)
-                    continue
-                # compute slice within chunk to emit
-                chunk_start = max(0, start - skipped)
-                chunk_end = min(len(chunk), end - skipped + 1)
-                to_send = chunk[chunk_start:chunk_end]
-                if to_send:
-                    try:
-                        MET_FILE_BYTES.inc(len(to_send))
-                    except (TypeError, ValueError) as e:
-                        logger.debug(
-                            "MET_FILE_BYTES.inc failed during ranged stream: %s",
-                            e,
-                        )
-                    yield to_send
-                    sent += len(to_send)
-                skipped += len(chunk)
-                if skipped > end:
-                    break
-        except (RuntimeError, OSError) as e:
-            MET_FILE_DOWNLOAD_FAILURES.inc()
-            logger.exception("Error during ranged streaming: %s", e)
-            raise
-
+    # create generator for the requested range
     content_length = end - start + 1
     headers = {
-        'Content-Range': (
-            f'bytes {start}-{end}/{total_size}'
-        ),
+        'Content-Range': f'bytes {start}-{end}/{total_size}',
         'Accept-Ranges': 'bytes',
         'Content-Length': str(content_length),
     }
     return StreamingResponse(
-        ranged_stream(),
+        _make_ranged_stream(inner_stream, start, end),
         status_code=206,
         media_type='application/octet-stream',
         headers=headers,
