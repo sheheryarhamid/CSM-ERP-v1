@@ -6,9 +6,10 @@ from typing import Optional, Iterator
 from prometheus_client import Counter
 import logging
 
-from .auth import is_admin
-from .audit import record_audit
-from .blob_store import get_default_store, BlobNotFound
+from hub.auth import is_admin
+from hub.audit import record_audit
+from hub.blob_store import get_default_store, BlobNotFound
+from hub.key_provider import KeyProviderError
 
 router = APIRouter()
 
@@ -114,7 +115,8 @@ async def file_download(file_id: str, request: Request, authorization: Optional[
     client_ip = None
     try:
         client_ip = (request.client and request.client.host) or 'unknown'
-    except Exception:
+    except AttributeError as e:
+        logger.debug("Unable to read client IP: %s", e)
         client_ip = 'unknown'
 
     record_audit({
@@ -128,7 +130,8 @@ async def file_download(file_id: str, request: Request, authorization: Optional[
 
     try:
         store = get_default_store()
-    except Exception:
+    except (ImportError, KeyError, RuntimeError, OSError, KeyProviderError) as e:
+        logger.debug("get_default_store failed: %s", e)
         store = None
 
     if store is None:
@@ -148,8 +151,9 @@ async def file_download(file_id: str, request: Request, authorization: Optional[
     except BlobNotFound:
         MET_FILE_DOWNLOAD_FAILURES.inc()
         raise HTTPException(status_code=404, detail="file not found in blob store")
-    except Exception:
+    except Exception as e:
         MET_FILE_DOWNLOAD_FAILURES.inc()
+        logger.exception("Error reading blob: %s", e)
         raise HTTPException(status_code=500, detail="error reading blob")
 
     # Support HTTP Range header for resumable/partial downloads
@@ -160,11 +164,12 @@ async def file_download(file_id: str, request: Request, authorization: Optional[
                 for chunk in inner_stream:
                     try:
                         MET_FILE_BYTES.inc(len(chunk))
-                    except Exception as e:
+                    except (TypeError, ValueError) as e:
                         logger.debug("MET_FILE_BYTES.inc failed: %s", e)
                     yield chunk
-            except Exception:
+            except (RuntimeError, OSError) as e:
                 MET_FILE_DOWNLOAD_FAILURES.inc()
+                logger.exception("Error during streaming: %s", e)
                 raise
 
         return StreamingResponse(counting_stream(), media_type='application/octet-stream')
@@ -196,7 +201,9 @@ async def file_download(file_id: str, request: Request, authorization: Optional[
 
     except HTTPException:
         raise
-    except Exception:
+    except Exception as e:
+        # For parsing errors surface a client 400; keep the original exception debug info.
+        logger.debug("Invalid Range header: %s", e)
         raise HTTPException(status_code=400, detail='invalid Range header')
 
     # Create a stream that skips until `start` and yields up to `end`.
@@ -215,15 +222,16 @@ async def file_download(file_id: str, request: Request, authorization: Optional[
                 if to_send:
                     try:
                         MET_FILE_BYTES.inc(len(to_send))
-                    except Exception as e:
+                    except (TypeError, ValueError) as e:
                         logger.debug("MET_FILE_BYTES.inc failed during ranged stream: %s", e)
                     yield to_send
                     sent += len(to_send)
                 skipped += len(chunk)
                 if skipped > end:
                     break
-        except Exception:
+        except (RuntimeError, OSError) as e:
             MET_FILE_DOWNLOAD_FAILURES.inc()
+            logger.exception("Error during ranged streaming: %s", e)
             raise
 
     content_length = end - start + 1

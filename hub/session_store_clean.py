@@ -51,6 +51,7 @@ class RedisSessionStore:
     # Office note: RedisSessionStore was intentionally removed to keep
     # the runtime self-contained (in-memory store) and avoid external
     # dependencies during this cleanup.
+    pass
 
 
 # Factory to pick backend (Redis or in-memory)

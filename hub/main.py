@@ -10,7 +10,6 @@ from .session_store import create_default_store
 from .audit import record_audit
 from .auth import is_admin
 import logging
-import os
 import jwt
 from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
 from fastapi.responses import Response
@@ -103,7 +102,8 @@ async def terminate_client(session_id: str, request: Request, authorization: str
     limit = int(os.getenv('RATE_LIMIT_PER_MIN', '60'))
     try:
         client_ip = (request.client and request.client.host) or 'unknown'
-    except Exception:
+    except Exception as e:
+        logger.debug("Unable to read client IP: %s", e)
         client_ip = 'unknown'
 
     # Rate limiter removed in cleanup branch: allow all requests.
@@ -126,9 +126,9 @@ async def terminate_client(session_id: str, request: Request, authorization: str
             "session_id": session_id,
             "by": "admin",
         })
-    except Exception:
+    except Exception as e:
         # auditing is best-effort; don't fail the request on audit error
-        logger.debug("record_audit failed on terminate_client: %s", exc_info=True)
+        logger.debug("record_audit failed on terminate_client: %s", e)
 
     return {"status": "terminated", "session_id": session_id}
 
@@ -164,10 +164,11 @@ async def get_audit(request: Request, limit: int = 100):
             for ln in lines:
                 try:
                     events.append(json.loads(ln))
-                except Exception:
+                except Exception as e:
+                    logger.debug("Failed to parse audit line: %s", e)
                     events.append({"raw": ln.strip()})
-        except Exception:
-            logger.debug("Failed reading audit log file %s: %s", path, exc_info=True)
+        except Exception as e:
+            logger.debug("Failed reading audit log file %s: %s", path, e)
 
     return {"events": events}
 

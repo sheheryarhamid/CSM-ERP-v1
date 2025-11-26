@@ -28,5 +28,5 @@ def record_audit(event: dict) -> None:
         path = os.path.join("logs", "audit.log")
         with open(path, "a", encoding="utf-8") as fh:
             fh.write(json.dumps(event_copy, ensure_ascii=False) + "\n")
-    except Exception:
-        logger.exception("Failed writing audit to file")
+    except OSError as e:
+        logger.exception("Failed writing audit to file: %s", e)

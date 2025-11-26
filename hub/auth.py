@@ -1,18 +1,18 @@
 import os
 import logging
 from typing import Optional
+import jwt
+from jwt import PyJWTError
 
 logger = logging.getLogger(__name__)
 
 
 def _verify_jwt(token: str, secret: str) -> Optional[dict]:
     try:
-        import jwt
-
         payload = jwt.decode(token, secret, algorithms=["HS256"])
         return payload
-    except Exception:
-        logger.exception("JWT verification failed")
+    except PyJWTError as e:
+        logger.exception("JWT verification failed: %s", e)
         return None
 
 
