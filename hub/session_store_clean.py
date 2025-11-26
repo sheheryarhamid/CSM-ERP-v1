@@ -6,6 +6,11 @@ import json
 import logging
 
 logger = logging.getLogger(__name__)
+"""Clean, in-memory-only session store used to avoid runtime Redis.
+
+This lightweight implementation is intentionally simple and intended for
+development and testing environments.
+"""
 
 
 class InMemorySessionStore:
@@ -51,6 +56,7 @@ class RedisSessionStore:
     # Office note: RedisSessionStore was intentionally removed to keep
     # the runtime self-contained (in-memory store) and avoid external
     # dependencies during this cleanup.
+    pass
 
 
 # Factory to pick backend (Redis or in-memory)

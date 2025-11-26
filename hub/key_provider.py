@@ -1,6 +1,15 @@
+"""Key provider helpers: DPAPI and env-based AES key retrieval.
+
+Provides `get_key_bytes` that supports a DPAPI-protected blob or a hex
+`BLOB_KEY` environment variable for development and migration testing.
+"""
+
 import os
 import base64
+import binascii
 from typing import Optional
+import ctypes
+from ctypes import wintypes
 
 
 class KeyProviderError(RuntimeError):
@@ -14,9 +23,6 @@ def _dpapi_unprotect(protected: bytes) -> bytes:
     """
     if os.name != 'nt':
         raise KeyProviderError("DPAPI is only supported on Windows")
-
-    import ctypes
-    from ctypes import wintypes
 
     class DATA_BLOB(ctypes.Structure):
         _fields_ = [('cbData', wintypes.DWORD), ('pbData', ctypes.c_void_p)]
@@ -43,19 +49,19 @@ def _dpapi_unprotect(protected: bytes) -> bytes:
 def get_key_bytes(key_hex: Optional[str] = None) -> bytes:
     """Return AES key bytes.
 
-    Selection logic:
-    - If `key_hex` provided, use it.
-    - If env `KEY_PROVIDER` == 'dpapi', attempt DPAPI providers:
-      - `BLOB_KEY_DPAPI` (base64-encoded protected blob) or
-      - `BLOB_KEY_DPAPI_FILE` (path to file containing protected blob)
-    - Otherwise read `BLOB_KEY` from env as hex (legacy behavior).
+        Selection logic:
+        - If `key_hex` provided, use it.
+        - If env `KEY_PROVIDER` == 'dpapi', attempt DPAPI providers:
+            - `BLOB_KEY_DPAPI` (base64-encoded protected blob), or
+            - `BLOB_KEY_DPAPI_FILE` (path to file containing protected blob).
+        - Otherwise read `BLOB_KEY` from env as hex (legacy behavior).
     """
     # direct override
     if key_hex:
         try:
             key = bytes.fromhex(key_hex)
-        except Exception:
-            raise KeyProviderError("invalid BLOB_KEY hex")
+        except ValueError as e:
+            raise KeyProviderError("invalid BLOB_KEY hex") from e
         if len(key) not in (16, 24, 32):
             raise KeyProviderError("BLOB_KEY must be 16/24/32 bytes (hex)")
         return key
@@ -70,13 +76,13 @@ def get_key_bytes(key_hex: Optional[str] = None) -> bytes:
         if b64:
             try:
                 protected = base64.b64decode(b64)
-            except Exception:
-                raise KeyProviderError('invalid base64 in BLOB_KEY_DPAPI')
+            except (binascii.Error, ValueError) as e:
+                raise KeyProviderError('invalid base64 in BLOB_KEY_DPAPI') from e
         else:
             try:
                 with open(path, 'rb') as fh:
                     protected = fh.read()
-            except Exception as e:
+            except OSError as e:
                 raise KeyProviderError('unable to read BLOB_KEY_DPAPI_FILE') from e
 
         key = _dpapi_unprotect(protected)
@@ -90,8 +96,8 @@ def get_key_bytes(key_hex: Optional[str] = None) -> bytes:
         raise KeyProviderError('BLOB_KEY not configured')
     try:
         key = bytes.fromhex(key_hex)
-    except Exception:
-        raise KeyProviderError('invalid BLOB_KEY hex')
+    except ValueError as e:
+        raise KeyProviderError('invalid BLOB_KEY hex') from e
     if len(key) not in (16, 24, 32):
         raise KeyProviderError('BLOB_KEY must be 16/24/32 bytes (hex)')
     return key

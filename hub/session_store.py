@@ -6,6 +6,11 @@ import json
 import logging
 
 logger = logging.getLogger(__name__)
+"""In-memory and optional Redis-backed session store implementations.
+
+The in-memory store is used by default in developer mode; Redis support
+remains for production integration but is not required at runtime.
+"""
 
 
 class InMemorySessionStore:
@@ -51,11 +56,15 @@ class RedisSessionStore:
     def __init__(self, redis_url: str):
         try:
             import redis
+        except ImportError as e:
+            logger.exception("Redis client library not installed: %s", e)
+            raise
 
+        try:
             self.client = redis.from_url(redis_url, decode_responses=True)
             # test connection
             self.client.ping()
-        except Exception as e:
+        except getattr(redis, 'RedisError', Exception) as e:
             logger.exception("Failed to connect to Redis at %s: %s", redis_url, e)
             raise
 
@@ -98,8 +107,8 @@ class RedisSessionStore:
                     self.client.srem(self.set_key, sid)
                     continue
                 out.append(json.loads(raw))
-            except Exception:
-                logger.exception("Failed reading session %s", sid)
+            except (json.JSONDecodeError, ValueError) as e:
+                logger.exception("Failed reading/parsing session %s: %s", sid, e)
         return out
 
     def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
@@ -121,6 +130,6 @@ def create_default_store():
     if redis_url:
         try:
             return RedisSessionStore(redis_url)
-        except Exception:
-            logger.warning("Falling back to in-memory session store")
+        except Exception as e:
+            logger.warning("Falling back to in-memory session store: %s", e)
     return InMemorySessionStore()

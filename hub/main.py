@@ -1,21 +1,24 @@
+"""Application entrypoint and admin/dev helper routes for the Hub."""
+
+import json
+import os
+import time
+import logging
+from datetime import datetime, timezone, timedelta
+from typing import Optional
+
+from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import List
-import json
-from datetime import datetime, timezone
-import os
+from fastapi.responses import Response
+
+import jwt
+from jwt import PyJWTError
+from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
 
 from .session_store import create_default_store
 from .audit import record_audit
 from .auth import is_admin
-import logging
-import os
-import jwt
-from prometheus_client import Counter, generate_latest, CONTENT_TYPE_LATEST
-from fastapi.responses import Response
-from datetime import timedelta
-import time
 from . import secure_files_impl as secure_files
 
 # Metrics
@@ -29,6 +32,7 @@ RATE_WINDOW_SECONDS = 60
 
 
 app = FastAPI(title="Central ERP Hub - Dev Skeleton")
+"""Application entrypoint and admin/dev helper routes for the Hub."""
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +107,8 @@ async def terminate_client(session_id: str, request: Request, authorization: str
     limit = int(os.getenv('RATE_LIMIT_PER_MIN', '60'))
     try:
         client_ip = (request.client and request.client.host) or 'unknown'
-    except Exception:
+    except AttributeError as e:
+        logger.debug("Unable to read client IP: %s", e)
         client_ip = 'unknown'
 
     # Rate limiter removed in cleanup branch: allow all requests.
@@ -126,9 +131,9 @@ async def terminate_client(session_id: str, request: Request, authorization: str
             "session_id": session_id,
             "by": "admin",
         })
-    except Exception:
+    except Exception as e:
         # auditing is best-effort; don't fail the request on audit error
-        logger.debug("record_audit failed on terminate_client: %s", exc_info=True)
+        logger.debug("record_audit failed on terminate_client: %s", e)
 
     return {"status": "terminated", "session_id": session_id}
 
@@ -164,10 +169,11 @@ async def get_audit(request: Request, limit: int = 100):
             for ln in lines:
                 try:
                     events.append(json.loads(ln))
-                except Exception:
+                except json.JSONDecodeError as e:
+                    logger.debug("Failed to parse audit line: %s", e)
                     events.append({"raw": ln.strip()})
-        except Exception:
-            logger.debug("Failed reading audit log file %s: %s", path, exc_info=True)
+        except OSError as e:
+            logger.debug("Failed reading audit log file %s: %s", path, e)
 
     return {"events": events}
 
@@ -190,10 +196,7 @@ async def mint_admin_token(x_admin_token: str | None = Header(None)):
 
     # create a token with role=admin
     try:
-        from datetime import timedelta
-        from datetime import datetime as _dt
-
-        now = _dt.now(timezone.utc)
+        now = datetime.now(timezone.utc)
         payload = {
             "sub": "admin",
             "role": "admin",
@@ -202,5 +205,5 @@ async def mint_admin_token(x_admin_token: str | None = Header(None)):
         }
         token = jwt.encode(payload, jwt_secret, algorithm="HS256")
         return {"access_token": token, "token_type": "bearer"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="token generation failed")
+    except PyJWTError as e:
+        raise HTTPException(status_code=500, detail="token generation failed") from e

@@ -1,10 +1,17 @@
+"""Local encrypted blob store (chunked AES-GCM) used for secure streaming.
+
+Each blob file contains a sequence of encrypted records so callers can
+stream-decrypt without loading the whole file into memory.
+"""
+
 import os
 import struct
 from typing import Iterator, Optional
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.exceptions import InvalidTag
 
-from .key_provider import get_key_bytes
+from hub.key_provider import get_key_bytes
 
 # Simple local encrypted blob store implementation for dev/testing.
 # Chunked envelope format (streaming-friendly): repeated records of
@@ -74,7 +81,7 @@ class LocalEncryptedBlobStore:
                     raise RuntimeError('truncated blob')
                 try:
                     plaintext = self.aesgcm.decrypt(nonce, ciphertext, None)
-                except Exception as e:
+                except InvalidTag as e:
                     raise RuntimeError('decryption failed') from e
                 total += len(plaintext)
 
@@ -98,13 +105,13 @@ class LocalEncryptedBlobStore:
                     raise RuntimeError('truncated blob')
                 try:
                     plaintext = self.aesgcm.decrypt(nonce, ciphertext, None)
-                except Exception as e:
+                except InvalidTag as e:
                     raise RuntimeError('decryption failed') from e
                 # yield plaintext in configured chunk_size slices
                 idx = 0
-                L = len(plaintext)
-                while idx < L:
-                    end = min(idx + chunk_size, L)
+                total_len = len(plaintext)
+                while idx < total_len:
+                    end = min(idx + chunk_size, total_len)
                     yield plaintext[idx:end]
                     idx = end
 
@@ -114,9 +121,9 @@ class LocalEncryptedBlobStore:
         p = self._path_for(blob_id)
         with open(p, 'wb') as fh:
             idx = 0
-            L = len(data)
-            while idx < L:
-                end = min(idx + chunk_size, L)
+            total_len = len(data)
+            while idx < total_len:
+                end = min(idx + chunk_size, total_len)
                 chunk = data[idx:end]
                 nonce = os.urandom(12)
                 ciphertext = self.aesgcm.encrypt(nonce, chunk, None)
