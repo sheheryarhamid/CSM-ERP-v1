@@ -49,12 +49,12 @@ def _dpapi_unprotect(protected: bytes) -> bytes:
 def get_key_bytes(key_hex: Optional[str] = None) -> bytes:
     """Return AES key bytes.
 
-    Selection logic:
-    - If `key_hex` provided, use it.
-    - If env `KEY_PROVIDER` == 'dpapi', attempt DPAPI providers:
-      - `BLOB_KEY_DPAPI` (base64-encoded protected blob) or
-      - `BLOB_KEY_DPAPI_FILE` (path to file containing protected blob)
-    - Otherwise read `BLOB_KEY` from env as hex (legacy behavior).
+        Selection logic:
+        - If `key_hex` provided, use it.
+        - If env `KEY_PROVIDER` == 'dpapi', attempt DPAPI providers:
+            - `BLOB_KEY_DPAPI` (base64-encoded protected blob), or
+            - `BLOB_KEY_DPAPI_FILE` (path to file containing protected blob).
+        - Otherwise read `BLOB_KEY` from env as hex (legacy behavior).
     """
     # direct override
     if key_hex:

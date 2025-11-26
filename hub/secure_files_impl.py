@@ -4,13 +4,19 @@ Routes in this module intentionally avoid returning filesystem paths
 to clients and enforce admin RBAC for download operations.
 """
 
-from fastapi import APIRouter, Request, HTTPException, Header
-from fastapi.responses import StreamingResponse
+"""Secure-files API router providing safe metadata and streaming downloads.
+
+Routes in this module intentionally avoid returning filesystem paths
+to clients and enforce admin RBAC for download operations.
+"""
+
+import logging
 from datetime import datetime, timezone
 from typing import Optional, Iterator
 
+from fastapi import APIRouter, Request, HTTPException, Header
+from fastapi.responses import StreamingResponse
 from prometheus_client import Counter
-import logging
 
 from hub.auth import is_admin
 from hub.audit import record_audit
@@ -61,10 +67,16 @@ async def list_files(request: Request):
         raise HTTPException(status_code=403, detail="admin credentials required")
 
     # do not expose any filesystem paths; return safe metadata only
-    return [
-        {"id": f["id"], "name": f["name"], "type": f["type"], "size_human": f.get("size_human"), "created_at": f.get("created_at")}
-        for f in _MOCK_FILES
-    ]
+    out = []
+    for f in _MOCK_FILES:
+        out.append({
+            "id": f["id"],
+            "name": f["name"],
+            "type": f["type"],
+            "size_human": f.get("size_human"),
+            "created_at": f.get("created_at"),
+        })
+    return out
 
 
 @router.get("/secure/files/{file_id}/meta")
@@ -97,7 +109,10 @@ async def file_preview(file_id: str, request: Request):
         raise HTTPException(status_code=403, detail="admin credentials required")
 
     if f["type"] == "sqlite":
-        preview = "SQLite DB: tables=products,customers,sales — size approx " + f.get("size_human", "n/a")
+        preview = (
+            "SQLite DB: tables=products,customers,sales — size approx "
+            + f.get("size_human", "n/a")
+        )
     elif f["type"] == "encrypted-backup":
         preview = "Encrypted backup — metadata only. Restore via Hub UI."
     else:
@@ -144,7 +159,10 @@ async def file_download(file_id: str, request: Request, authorization: Optional[
         def iter_bytes():
             if f["type"] == "sqlite":
                 yield b"-- SQLite meta: tables=products,customers,sales\n"
-                yield b"-- This is a demo stream; real DB bytes should be streamed securely.\n"
+                yield (
+                    b"-- This is a demo stream; real DB bytes should be "
+                    b"streamed securely.\n"
+                )
             elif f["type"] == "encrypted-backup":
                 yield b"ENCRYPTED_BACKUP_HEADER\n"
                 yield b"(binary blob omitted in demo)\n"
@@ -171,7 +189,10 @@ async def file_download(file_id: str, request: Request, authorization: Optional[
                     try:
                         MET_FILE_BYTES.inc(len(chunk))
                     except (TypeError, ValueError) as e:
-                        logger.debug("MET_FILE_BYTES.inc failed: %s", e)
+                        logger.debug(
+                            "MET_FILE_BYTES.inc failed: %s",
+                            e,
+                        )
                     yield chunk
             except (RuntimeError, OSError) as e:
                 MET_FILE_DOWNLOAD_FAILURES.inc()
@@ -229,7 +250,10 @@ async def file_download(file_id: str, request: Request, authorization: Optional[
                     try:
                         MET_FILE_BYTES.inc(len(to_send))
                     except (TypeError, ValueError) as e:
-                        logger.debug("MET_FILE_BYTES.inc failed during ranged stream: %s", e)
+                        logger.debug(
+                            "MET_FILE_BYTES.inc failed during ranged stream: %s",
+                            e,
+                        )
                     yield to_send
                     sent += len(to_send)
                 skipped += len(chunk)
@@ -242,8 +266,15 @@ async def file_download(file_id: str, request: Request, authorization: Optional[
 
     content_length = end - start + 1
     headers = {
-        'Content-Range': f'bytes {start}-{end}/{total_size}',
+        'Content-Range': (
+            f'bytes {start}-{end}/{total_size}'
+        ),
         'Accept-Ranges': 'bytes',
         'Content-Length': str(content_length),
     }
-    return StreamingResponse(ranged_stream(), status_code=206, media_type='application/octet-stream', headers=headers)
+    return StreamingResponse(
+        ranged_stream(),
+        status_code=206,
+        media_type='application/octet-stream',
+        headers=headers,
+    )

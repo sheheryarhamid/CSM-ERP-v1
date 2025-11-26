@@ -26,9 +26,10 @@ def _verify_jwt(token: str, secret: str) -> Optional[dict]:
 def is_admin(authorization: Optional[str], x_admin_token: Optional[str]) -> bool:
     """Return True if provided credentials authorize an admin action.
 
-    Accepts either:
-    - `x_admin_token` matching `ADMIN_TOKEN` env var (legacy), or
-    - `Authorization: Bearer <jwt>` where JWT verifies with `ADMIN_JWT_SECRET` and contains `role: admin`.
+        Accepts either:
+        - `x_admin_token` matching `ADMIN_TOKEN` env var (legacy), or
+        - `Authorization: Bearer <jwt>` where the JWT verifies with
+            `ADMIN_JWT_SECRET` and contains the claim `role: admin`.
     """
     admin_token = os.getenv("ADMIN_TOKEN")
     if admin_token and x_admin_token and x_admin_token == admin_token:
