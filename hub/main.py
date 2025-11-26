@@ -28,6 +28,7 @@ RATE_WINDOW_SECONDS = 60
 
 
 app = FastAPI(title="Central ERP Hub - Dev Skeleton")
+"""Application entrypoint and admin/dev helper routes for the Hub."""
 
 logger = logging.getLogger(__name__)
 

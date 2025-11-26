@@ -7,6 +7,12 @@ from cryptography.exceptions import InvalidTag
 
 from hub.key_provider import get_key_bytes
 
+"""Local encrypted blob store (chunked AES-GCM) used for secure streaming.
+
+Each blob file contains a sequence of encrypted records so callers can
+stream-decrypt without loading the whole file into memory.
+"""
+
 # Simple local encrypted blob store implementation for dev/testing.
 # Chunked envelope format (streaming-friendly): repeated records of
 # [nonce(12)][ciphertext_len(4, big-endian)][ciphertext+tag]

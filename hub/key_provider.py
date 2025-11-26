@@ -1,3 +1,9 @@
+"""Key provider helpers: DPAPI and env-based AES key retrieval.
+
+Provides `get_key_bytes` that supports a DPAPI-protected blob or a hex
+`BLOB_KEY` environment variable for development and migration testing.
+"""
+
 import os
 import base64
 import binascii

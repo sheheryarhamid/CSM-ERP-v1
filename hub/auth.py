@@ -1,3 +1,9 @@
+"""Authentication helpers for admin RBAC used by the hub.
+
+Provides JWT verification and legacy token support for administrative
+operations in dev/testing environments.
+"""
+
 import os
 import logging
 from typing import Optional
@@ -8,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def _verify_jwt(token: str, secret: str) -> Optional[dict]:
+    """Verify and return JWT payload, or None on verification error."""
     try:
         payload = jwt.decode(token, secret, algorithms=["HS256"])
         return payload

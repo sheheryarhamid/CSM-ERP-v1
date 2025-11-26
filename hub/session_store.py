@@ -6,6 +6,11 @@ import json
 import logging
 
 logger = logging.getLogger(__name__)
+"""In-memory and optional Redis-backed session store implementations.
+
+The in-memory store is used by default in developer mode; Redis support
+remains for production integration but is not required at runtime.
+"""
 
 
 class InMemorySessionStore:

@@ -1,3 +1,9 @@
+"""Audit utilities — append-only file-backed audit events for dev/staging.
+
+This module provides a minimal, durable audit sink used during development
+and for environments where external audit services are not configured.
+"""
+
 import os
 import json
 import logging

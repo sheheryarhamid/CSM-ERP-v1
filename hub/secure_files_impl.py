@@ -1,3 +1,9 @@
+"""Secure-files API router providing safe metadata and streaming downloads.
+
+Routes in this module intentionally avoid returning filesystem paths
+to clients and enforce admin RBAC for download operations.
+"""
+
 from fastapi import APIRouter, Request, HTTPException, Header
 from fastapi.responses import StreamingResponse
 from datetime import datetime, timezone
