@@ -23,8 +23,7 @@ def _verify_jwt(token: str, secret: str) -> Optional[dict]:
 
 class InvalidTokenError(Exception):
     """Raised when a JWT token cannot be verified."""
-
-    pass
+    
 
 
 def is_admin(authorization: Optional[str], x_admin_token: Optional[str]) -> bool:

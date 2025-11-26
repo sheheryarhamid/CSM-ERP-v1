@@ -6,7 +6,7 @@ from .session_store_base import InMemorySessionStore
 class RedisSessionStore:
     """Placeholder RedisSessionStore used in cleanup branch (no runtime Redis)."""
     # Redis-backed session store intentionally removed for runtime simplicity.
-    pass
+    
 
 
 def create_default_store():

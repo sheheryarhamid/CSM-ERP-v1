@@ -2,6 +2,18 @@
 
 Provides `get_key_bytes` that supports a DPAPI-protected blob or a hex
 `BLOB_KEY` environment variable for development and migration testing.
+
+Notes about linting: this module contains a small Windows interop type
+(`DATA_BLOB`) that intentionally uses non-snake_case field names and
+assigns attributes outside of Pythonic `__init__` for direct ctypes
+compatibility with the Win32 API. These are documented and are explicitly
+allowed below so static checks do not raise noisy warnings.
+
+# The following pylint disables are limited and intentional:
+# - invalid-name / attribute-defined-outside-init: for `DATA_BLOB` fields
+# - too-few-public-methods / too-many-branches: pragmatic acceptance for
+#   this small adapter module that contains provider selection logic.
+# pylint: disable=invalid-name,attribute-defined-outside-init,too-few-public-methods,too-many-branches
 """
 
 import base64
