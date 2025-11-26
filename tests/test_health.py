@@ -50,7 +50,7 @@ def test_create_and_terminate_session():
         elif jwt_secret:
             # If only ADMIN_JWT_SECRET is configured in CI, craft a JWT locally for the test.
             try:
-                from jose import jwt
+                import jwt
                 from datetime import datetime as _dt, timedelta, timezone as _tz
                 now = _dt.now(_tz.utc)
                 payload = {"sub": "admin", "role": "admin", "iat": int(now.timestamp()), "exp": int((now + timedelta(minutes=30)).timestamp())}
