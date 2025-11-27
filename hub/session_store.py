@@ -1,61 +1,39 @@
-from typing import Dict, Any, List, Optional
-from datetime import datetime, timezone
-import uuid
-import os
+"""Session store glue: expose session-store implementations.
+
+This module keeps the runtime API stable while reusing the shared
+`InMemorySessionStore` implementation from `session_store_base`.
+"""
+
 import json
 import logging
+import os
+from typing import Any, Optional
+
+from .session_store_base import InMemorySessionStore, _spec_to_kwargs
 
 logger = logging.getLogger(__name__)
 
 
-class InMemorySessionStore:
-    def __init__(self):
-        self.sessions: Dict[str, Dict[str, Any]] = {}
-
-    def _now(self) -> str:
-        return datetime.now(timezone.utc).isoformat()
-
-    def create_session(self, user: str, role: str, device: Optional[str] = None, store: Optional[str] = None, module: Optional[str] = None, connection_type: Optional[str] = None) -> Dict[str, Any]:
-        session_id = str(uuid.uuid4())
-        now = self._now()
-        s = {
-            "session_id": session_id,
-            "user": user,
-            "role": role,
-            "device": device,
-            "store": store,
-            "module": module,
-            "connection_type": connection_type,
-            "start_time": now,
-            "last_activity": now,
-        }
-        self.sessions[session_id] = s
-        return s
-
-    def list_sessions(self, *, since_seconds: Optional[int] = None) -> List[Dict[str, Any]]:
-        # since_seconds unused for now; return all
-        return list(self.sessions.values())
-
-    def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
-        return self.sessions.get(session_id)
-
-    def terminate_session(self, session_id: str) -> bool:
-        if session_id in self.sessions:
-            del self.sessions[session_id]
-            return True
-        return False
-
-
 class RedisSessionStore:
-    """A simple Redis-backed session store using JSON blobs. Not highly optimized — suitable for MVP."""
+    """A simple Redis-backed session store using JSON blobs.
+
+    Not highly optimized — suitable for MVP.
+    """
+
     def __init__(self, redis_url: str):
         try:
+            # Local import so runtime doesn't require Redis if not used.
+            # pylint: disable=import-outside-toplevel
             import redis
+        except ImportError as e:
+            logger.exception("Redis client library not installed: %s", e)
+            raise
 
+        try:
             self.client = redis.from_url(redis_url, decode_responses=True)
             # test connection
             self.client.ping()
-        except Exception as e:
+        except getattr(redis, "RedisError", Exception) as e:
             logger.exception("Failed to connect to Redis at %s: %s", redis_url, e)
             raise
 
@@ -63,22 +41,38 @@ class RedisSessionStore:
         self.set_key = "hub:sessions"
 
     def _key(self, session_id: str) -> str:
+        """Return the storage key for a session id."""
         return f"{self.prefix}{session_id}"
 
     def _now(self) -> str:
+        """Return current UTC time in ISO format.
+
+        Local import keeps redis client optional for environments that don't
+        need it.
+        """
+        # Local import to avoid requiring Redis in environments that don't need it.
+        # pylint: disable=import-outside-toplevel
+        from datetime import datetime, timezone
+
         return datetime.now(timezone.utc).isoformat()
 
-    def create_session(self, user: str, role: str, device: Optional[str] = None, store: Optional[str] = None, module: Optional[str] = None, connection_type: Optional[str] = None) -> Dict[str, Any]:
+    def create_session(self, spec: Any):
+        """Create a session from a single spec (dict, dataclass, or model)."""
+        # Local import to avoid adding a global runtime dependency.
+        # pylint: disable=import-outside-toplevel
+        import uuid
+
+        kw = _spec_to_kwargs(spec)
         session_id = str(uuid.uuid4())
         now = self._now()
         s = {
             "session_id": session_id,
-            "user": user,
-            "role": role,
-            "device": device,
-            "store": store,
-            "module": module,
-            "connection_type": connection_type,
+            "user": kw.get("user"),
+            "role": kw.get("role"),
+            "device": kw.get("device"),
+            "store": kw.get("store"),
+            "module": kw.get("module"),
+            "connection_type": kw.get("connection_type"),
             "start_time": now,
             "last_activity": now,
         }
@@ -87,7 +81,8 @@ class RedisSessionStore:
         self.client.sadd(self.set_key, session_id)
         return s
 
-    def list_sessions(self, *, since_seconds: Optional[int] = None) -> List[Dict[str, Any]]:
+    def list_sessions(self, *, _since_seconds: Optional[int] = None):
+        """Return list of sessions stored in Redis (best-effort)."""
         ids = self.client.smembers(self.set_key) or []
         out = []
         for sid in ids:
@@ -98,17 +93,19 @@ class RedisSessionStore:
                     self.client.srem(self.set_key, sid)
                     continue
                 out.append(json.loads(raw))
-            except Exception:
-                logger.exception("Failed reading session %s", sid)
+            except (json.JSONDecodeError, ValueError) as e:
+                logger.exception("Failed reading/parsing session %s: %s", sid, e)
         return out
 
-    def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+    def get_session(self, session_id: str):
+        """Retrieve a single session by id from Redis, or None if missing."""
         raw = self.client.get(self._key(session_id))
         if not raw:
             return None
         return json.loads(raw)
 
     def terminate_session(self, session_id: str) -> bool:
+        """Remove a session and return True when it existed and was deleted."""
         key = self._key(session_id)
         existed = self.client.delete(key)
         self.client.srem(self.set_key, session_id)
@@ -117,10 +114,15 @@ class RedisSessionStore:
 
 # Factory to pick backend (Redis or in-memory)
 def create_default_store():
+    """Return the default session store instance.
+
+    If `REDIS_URL` is configured attempt to create a `RedisSessionStore`,
+    otherwise return an `InMemorySessionStore`.
+    """
     redis_url = os.getenv("REDIS_URL")
     if redis_url:
         try:
             return RedisSessionStore(redis_url)
-        except Exception:
-            logger.warning("Falling back to in-memory session store")
+        except (ImportError, OSError, RuntimeError) as e:
+            logger.warning("Falling back to in-memory session store: %s", e)
     return InMemorySessionStore()

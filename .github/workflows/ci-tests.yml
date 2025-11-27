@@ -27,6 +27,8 @@ jobs:
           pip install pytest pytest-asyncio pylint
 
       - name: Run tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
         run: |
           pytest -q
 

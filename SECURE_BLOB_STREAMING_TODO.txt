@@ -1,0 +1,53 @@
+Secure Blob Streaming — Implementation To-Do (tracked)
+
+Location: moved out of the Master.ini and tracked here for implementation.
+
+Current status summary (updated by agent on 2025-11-27):
+- Overall progress: 55% (some core components implemented and tested; integration, docs, and rollout remain)
+
+Checklist and remaining tasks:
+- [x] Finalize secure blob streaming implementation (chunked AES-GCM, streaming API)
+  - Notes: Implementation exists in `hub/blob_store.py` and `hub/secure_files_impl.py` (server-side streaming + chunk format).
+- [x] Key provider: env fallback + DPAPI support implemented
+  - Notes: `hub/key_provider.py` supports DPAPI + `BLOB_KEY` env fallback.
+- [x] Hardened secure endpoints: admin auth, audit events, and Prometheus metrics
+  - Notes: Admin RBAC, `hub/audit.py`, and Prometheus counters present in `hub/secure_files_impl.py`.
+- [x] Range / resumable download support (HTTP `Range`, 206 Partial Content)
+  - Notes: Range parsing and partial responses implemented in `hub/secure_files_impl.py`.
+- [ ] Large-file & performance tests (stream >100MB, assert bounded memory)
+  - Action: add `dev/scripts/streaming_perf.py` and CI job to run warmup + steady-state streaming perf tests.
+- [ ] Frontend `SecureFileViewer` (Fetch + ReadableStream, resume support)
+  - Action: build small demo app (or pluggable component) that consumes ranged AES-GCM streaming and reconstructs resource client-side.
+- [ ] Operational docs & key rotation guide (`docs/secure-blob-stream.md`)
+  - Action: document chunk format, key provider setup (DPAPI vs KMS), rotation steps, and emergency key rollover procedure.
+- [x] Cleanup legacy mock endpoints and remove leftover limiter/Redis references
+  - Notes: Redis made opt-in; in-memory session store is default.
+- [ ] Prepare release & changelog (e.g., `v1.3.0`)
+  - Action: draft release notes, call out security model, list breaking changes.
+- [x] Security review & dependency scanning (bandit/pylint, SCA)
+  - Notes: Local scanning and pip-audit performed; `ecdsa` vulnerability removed.
+- [ ] Merge PR `feat/secure-blob-stream` → `main` and run post-merge checks
+  - Action: ensure GitHub Actions run and pass (format, lint, tests, pip-audit, perf), then merge.
+- [ ] Staging deploy & E2E validation (UI streaming, range tests, audit checks)
+  - Action: deploy to staging, run `dev/scripts/smoke_test.py` and streaming E2E tests.
+- [ ] Production rollout with KMS + monitoring and runbook
+  - Action: replace DPAPI with KMS provider for cloud installs; add monitoring dashboards and alert rules.
+- [ ] Final sign-off and archive planning docs
+  - Action: get security and product sign-off; archive old mock endpoints and finalize docs.
+
+Detailed remaining work (short-term priority):
+1) Add large-file streaming performance tests and CI gating.
+2) Implement/ship a minimal frontend streaming consumer for manual E2E validation.
+3) Write `docs/secure-blob-stream.md` describing chunk format, env vars, and rotation steps.
+4) Wait for remote CI runs on PR #7 to complete and respond to any failures.
+5) Merge PR and perform staging deploy + smoke/E2E tests.
+
+If you want, I can now:
+- Add the perf script `dev/scripts/streaming_perf.py` and a minimal frontend demo and push them to the branch, or
+- Draft the `docs/secure-blob-stream.md` file and attach it to the PR, or
+- Wait for CI and merge the PR on green.
+
+File provenance:
+- Implementation references: `hub/blob_store.py`, `hub/secure_files_impl.py`, `hub/key_provider.py`, `hub/audit.py`.
+
+(End of tracked Secure Blob Streaming checklist)

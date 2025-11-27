@@ -1,18 +1,20 @@
 import json
 import sys
 from pathlib import Path
-from jsonschema import validate, ValidationError
+
+from jsonschema import ValidationError, validate
 
 SCHEMA_PATH = Path(__file__).resolve().parents[2] / "docs" / "manifests" / "manifest-schema.json"
 
+
 def load_schema():
-    with open(SCHEMA_PATH, 'r', encoding='utf-8') as f:
+    with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
 def validate_manifest(manifest_path: str) -> bool:
     schema = load_schema()
-    with open(manifest_path, 'r', encoding='utf-8') as f:
+    with open(manifest_path, "r", encoding="utf-8") as f:
         manifest = json.loads(f.read())
     try:
         validate(instance=manifest, schema=schema)
@@ -24,7 +26,7 @@ def validate_manifest(manifest_path: str) -> bool:
         return False
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage: python -m module_sdk.validator path/to/manifest.json")
         sys.exit(2)

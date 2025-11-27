@@ -1,6 +1,7 @@
-import os
 import json
+import os
 import time
+
 from fastapi.testclient import TestClient
 
 from hub.main import app
@@ -40,7 +41,9 @@ def test_admin_token_rbac(tmp_path, monkeypatch):
 
     # audit file should contain an entry
     events = _read_audit_file()
-    assert any(e.get("action") == "terminate_session" and e.get("session_id") == sid for e in events)
+    assert any(
+        e.get("action") == "terminate_session" and e.get("session_id") == sid for e in events
+    )
 
 
 def test_jwt_admin_rbac(tmp_path, monkeypatch):
@@ -64,7 +67,9 @@ def test_jwt_admin_rbac(tmp_path, monkeypatch):
 
     # audit file should contain entry
     events = _read_audit_file()
-    assert any(e.get("action") == "terminate_session" and e.get("session_id") == sid for e in events)
+    assert any(
+        e.get("action") == "terminate_session" and e.get("session_id") == sid for e in events
+    )
 
 
 def test_mint_token_endpoint(tmp_path, monkeypatch):

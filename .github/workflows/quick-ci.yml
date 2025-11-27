@@ -1,0 +1,53 @@
+name: Quick CI (format/lint/tests/security)
+
+on:
+  push:
+    branches: [ main, pr/*, pr-lint-cleanup-ready ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install black==25.11.0 isort==7.0.0 pylint pytest pip-audit
+
+      - name: Run isort
+        run: |
+          python -m isort --check-only .
+
+      - name: Run black
+        run: |
+          python -m black --check --line-length 100 .
+
+      - name: Run pylint
+        run: |
+          python -m pylint hub || true
+
+      - name: Run tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python -m pytest -q
+
+      - name: Run pip-audit
+        run: |
+          python -m pip_audit --json > pip_audit_report.json || true
+
+      - name: Upload reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: |
+            pip_audit_report.json

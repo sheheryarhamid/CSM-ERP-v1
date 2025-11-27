@@ -1,10 +1,17 @@
+"""Local encrypted blob store (chunked AES-GCM) used for secure streaming.
+
+Each blob file contains a sequence of encrypted records so callers can
+stream-decrypt without loading the whole file into memory.
+"""
+
 import os
 import struct
 from typing import Iterator, Optional
 
+from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from .key_provider import get_key_bytes
+from hub.key_provider import get_key_bytes
 
 # Simple local encrypted blob store implementation for dev/testing.
 # Chunked envelope format (streaming-friendly): repeated records of
@@ -15,10 +22,16 @@ BASE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dev", "blob
 
 
 class BlobNotFound(Exception):
-    pass
+    """Raised when the requested blob file does not exist."""
 
 
 class LocalEncryptedBlobStore:
+    """A local file-backed encrypted blob store using AES-GCM per-record.
+
+    Blobs are stored as a sequence of records so files can be streamed and
+    decrypted without loading the entire plaintext into memory.
+    """
+
     def __init__(self, base_dir: Optional[str] = None, key_hex: Optional[str] = None):
         self.base_dir = base_dir or BASE_DIR
         # Use the key provider abstraction so we can swap in KMS/DPAPI later
@@ -31,20 +44,23 @@ class LocalEncryptedBlobStore:
         self.aesgcm = AESGCM(self.key)
 
     def _path_for(self, blob_id: str) -> str:
+        """Return the safe filesystem path for a blob id (sanitized)."""
         # do not leak paths outside base_dir — sanitize blob_id
         safe = os.path.basename(blob_id)
         return os.path.join(self.base_dir, f"{safe}.blob")
 
     def list_blobs(self):
+        """List blob ids present in the backing directory."""
         if not os.path.isdir(self.base_dir):
             return []
         out = []
         for fn in os.listdir(self.base_dir):
-            if fn.endswith('.blob'):
+            if fn.endswith(".blob"):
                 out.append(fn[:-5])
         return out
 
     def get_meta(self, blob_id: str):
+        """Return basic metadata for a blob (id and size)."""
         p = self._path_for(blob_id)
         if not os.path.exists(p):
             raise BlobNotFound()
@@ -62,69 +78,74 @@ class LocalEncryptedBlobStore:
             raise BlobNotFound()
 
         total = 0
-        with open(p, 'rb') as fh:
+        with open(p, "rb") as fh:
             while True:
                 header = fh.read(12 + 4)
                 if not header or len(header) < 16:
                     break
                 nonce = header[:12]
-                clen = struct.unpack('>I', header[12:16])[0]
+                clen = struct.unpack(">I", header[12:16])[0]
                 ciphertext = fh.read(clen)
                 if len(ciphertext) != clen:
-                    raise RuntimeError('truncated blob')
+                    raise RuntimeError("truncated blob")
                 try:
                     plaintext = self.aesgcm.decrypt(nonce, ciphertext, None)
-                except Exception as e:
-                    raise RuntimeError('decryption failed') from e
+                except InvalidTag as e:
+                    raise RuntimeError("decryption failed") from e
                 total += len(plaintext)
 
         return total
 
     def stream_blob(self, blob_id: str, chunk_size: int = 4096) -> Iterator[bytes]:
-        """Stream decrypted blob bytes using per-chunk AES-GCM records."""
+        """Stream decrypted blob bytes using per-chunk AES-GCM records.
+
+        Yields plaintext slices of at most `chunk_size` bytes.
+        """
         p = self._path_for(blob_id)
         if not os.path.exists(p):
             raise BlobNotFound()
 
-        with open(p, 'rb') as fh:
+        with open(p, "rb") as fh:
             while True:
                 header = fh.read(12 + 4)
                 if not header or len(header) < 16:
                     break
                 nonce = header[:12]
-                clen = struct.unpack('>I', header[12:16])[0]
+                clen = struct.unpack(">I", header[12:16])[0]
                 ciphertext = fh.read(clen)
                 if len(ciphertext) != clen:
-                    raise RuntimeError('truncated blob')
+                    raise RuntimeError("truncated blob")
                 try:
                     plaintext = self.aesgcm.decrypt(nonce, ciphertext, None)
-                except Exception as e:
-                    raise RuntimeError('decryption failed') from e
+                except InvalidTag as e:
+                    raise RuntimeError("decryption failed") from e
                 # yield plaintext in configured chunk_size slices
                 idx = 0
-                L = len(plaintext)
-                while idx < L:
-                    end = min(idx + chunk_size, L)
+                total_len = len(plaintext)
+                while idx < total_len:
+                    end = min(idx + chunk_size, total_len)
                     yield plaintext[idx:end]
                     idx = end
 
     # Helper for tests/utility to write chunked blob
     def create_chunked_blob(self, blob_id: str, data: bytes, chunk_size: int = 4096):
+        """Write an encrypted, chunked blob file for testing/persistence."""
         os.makedirs(self.base_dir, exist_ok=True)
         p = self._path_for(blob_id)
-        with open(p, 'wb') as fh:
+        with open(p, "wb") as fh:
             idx = 0
-            L = len(data)
-            while idx < L:
-                end = min(idx + chunk_size, L)
+            total_len = len(data)
+            while idx < total_len:
+                end = min(idx + chunk_size, total_len)
                 chunk = data[idx:end]
                 nonce = os.urandom(12)
                 ciphertext = self.aesgcm.encrypt(nonce, chunk, None)
                 fh.write(nonce)
-                fh.write(struct.pack('>I', len(ciphertext)))
+                fh.write(struct.pack(">I", len(ciphertext)))
                 fh.write(ciphertext)
                 idx = end
 
 
 def get_default_store() -> LocalEncryptedBlobStore:
+    """Return the default local encrypted blob store instance."""
     return LocalEncryptedBlobStore()

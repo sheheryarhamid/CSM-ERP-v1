@@ -1,19 +1,28 @@
-import os
+"""Authentication helpers for admin RBAC used by the hub.
+
+Provides JWT verification and legacy token support for administrative
+operations in dev/testing environments.
+"""
+
 import logging
+import os
 from typing import Optional
+
+import jwt
 
 logger = logging.getLogger(__name__)
 
 
 def _verify_jwt(token: str, secret: str) -> Optional[dict]:
+    """Verify and return JWT payload, or None on verification error."""
     try:
-        import jwt
+        return jwt.decode(token, secret, algorithms=["HS256"])
+    except jwt.PyJWTError as exc:
+        raise InvalidTokenError("Invalid JWT token") from exc
 
-        payload = jwt.decode(token, secret, algorithms=["HS256"])
-        return payload
-    except Exception:
-        logger.exception("JWT verification failed")
-        return None
+
+class InvalidTokenError(Exception):
+    """Raised when a JWT token cannot be verified."""
 
 
 def is_admin(authorization: Optional[str], x_admin_token: Optional[str]) -> bool:
@@ -21,7 +30,8 @@ def is_admin(authorization: Optional[str], x_admin_token: Optional[str]) -> bool
 
     Accepts either:
     - `x_admin_token` matching `ADMIN_TOKEN` env var (legacy), or
-    - `Authorization: Bearer <jwt>` where JWT verifies with `ADMIN_JWT_SECRET` and contains `role: admin`.
+    - `Authorization: Bearer <jwt>` where the JWT verifies with
+        `ADMIN_JWT_SECRET` and contains the claim `role: admin`.
     """
     admin_token = os.getenv("ADMIN_TOKEN")
     if admin_token and x_admin_token and x_admin_token == admin_token:
