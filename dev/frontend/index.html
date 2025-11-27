@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Central ERP Hub - Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f7fa;
+            color: #2c3e50;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 40px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        .status-bar {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.online {
+            background: #10b981;
+        }
+
+        .status-indicator.offline {
+            background: #ef4444;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .status-text {
+            font-size: 14px;
+            color: #6b7280;
+        }
+
+        .status-value {
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+            border-left: 4px solid transparent;
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+        }
+
+        .card.primary {
+            border-left-color: #667eea;
+        }
+
+        .card.success {
+            border-left-color: #10b981;
+        }
+
+        .card.warning {
+            border-left-color: #f59e0b;
+        }
+
+        .card.danger {
+            border-left-color: #ef4444;
+        }
+
+        .card-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            margin-bottom: 16px;
+        }
+
+        .card.primary .card-icon {
+            background: #eef2ff;
+            color: #667eea;
+        }
+
+        .card.success .card-icon {
+            background: #d1fae5;
+            color: #10b981;
+        }
+
+        .card.warning .card-icon {
+            background: #fef3c7;
+            color: #f59e0b;
+        }
+
+        .card.danger .card-icon {
+            background: #fee2e2;
+            color: #ef4444;
+        }
+
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #1f2937;
+        }
+
+        .card-description {
+            font-size: 14px;
+            color: #6b7280;
+            line-height: 1.5;
+        }
+
+        .quick-actions {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .quick-actions h2 {
+            font-size: 20px;
+            margin-bottom: 20px;
+            color: #1f2937;
+        }
+
+        .action-buttons {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+        }
+
+        .action-btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .action-btn.primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .action-btn.primary:hover {
+            background: #5568d3;
+        }
+
+        .action-btn.secondary {
+            background: #e5e7eb;
+            color: #374151;
+        }
+
+        .action-btn.secondary:hover {
+            background: #d1d5db;
+        }
+
+        .action-btn.success {
+            background: #10b981;
+            color: white;
+        }
+
+        .action-btn.success:hover {
+            background: #059669;
+        }
+
+        .action-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            padding: 32px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            margin-bottom: 20px;
+        }
+
+        .modal-title {
+            font-size: 22px;
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .modal-body {
+            margin-bottom: 24px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #374151;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+            background: white;
+            cursor: pointer;
+        }
+
+        .modal-footer {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            display: none;
+            font-size: 14px;
+        }
+
+        .alert.show {
+            display: block;
+        }
+
+        .alert.success {
+            background: #d1fae5;
+            color: #065f46;
+            border-left: 4px solid #10b981;
+        }
+
+        .alert.error {
+            background: #fee2e2;
+            color: #991b1b;
+            border-left: 4px solid #ef4444;
+        }
+
+        .alert.info {
+            background: #dbeafe;
+            color: #1e40af;
+            border-left: 4px solid #3b82f6;
+        }
+
+        .table-container {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            overflow-x: auto;
+            margin-top: 30px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            text-align: left;
+            padding: 12px;
+            background: #f9fafb;
+            font-weight: 600;
+            color: #374151;
+            font-size: 14px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #f3f4f6;
+            font-size: 14px;
+            color: #6b7280;
+        }
+
+        tr:hover td {
+            background: #f9fafb;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge.success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .badge.warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .badge.danger {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .badge.info {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f4f6;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #9ca3af;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .empty-state-text {
+            font-size: 16px;
+            margin-bottom: 24px;
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                padding: 16px 20px;
+            }
+
+            .container {
+                padding: 20px 16px;
+            }
+
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            .status-bar {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🏢 Central ERP Hub</h1>
+        <p>Command Center - Your retail business control panel</p>
+    </div>
+
+    <div class="container">
+        <!-- Status Bar -->
+        <div class="status-bar">
+            <div class="status-item">
+                <div class="status-indicator online" id="statusIndicator"></div>
+                <div>
+                    <div class="status-text">Server Status</div>
+                    <div class="status-value" id="serverStatus">Checking...</div>
+                </div>
+            </div>
+            <div class="status-item">
+                <div>
+                    <div class="status-text">Active Sessions</div>
+                    <div class="status-value" id="activeSessions">-</div>
+                </div>
+            </div>
+            <div class="status-item">
+                <div>
+                    <div class="status-text">Environment</div>
+                    <div class="status-value">Local Development</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Alert Container -->
+        <div id="alertContainer"></div>
+
+        <!-- Feature Cards -->
+        <div class="grid">
+            <div class="card primary" onclick="openBlobViewer()">
+                <div class="card-icon">📁</div>
+                <div class="card-title">Secure File Manager</div>
+                <div class="card-description">Upload, download, and manage encrypted files with resume support</div>
+            </div>
+
+            <div class="card success" onclick="viewClients()">
+                <div class="card-icon">👥</div>
+                <div class="card-title">Connected Clients</div>
+                <div class="card-description">View and manage active sessions, devices, and users</div>
+            </div>
+
+            <div class="card warning" onclick="viewMetrics()">
+                <div class="card-icon">📊</div>
+                <div class="card-title">System Metrics</div>
+                <div class="card-description">Monitor performance, usage, and health metrics</div>
+            </div>
+
+            <div class="card danger" onclick="viewAuditLogs()">
+                <div class="card-icon">🔒</div>
+                <div class="card-title">Audit Logs</div>
+                <div class="card-description">Security events, access logs, and compliance tracking</div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="quick-actions">
+            <h2>Quick Actions</h2>
+            <div class="action-buttons">
+                <button class="action-btn primary" onclick="createSession()">
+                    ➕ New Session
+                </button>
+                <button class="action-btn secondary" onclick="viewApiDocs()">
+                    📚 API Docs
+                </button>
+                <button class="action-btn secondary" onclick="refreshStatus()">
+                    🔄 Refresh Status
+                </button>
+                <button class="action-btn success" onclick="runHealthCheck()">
+                    ✓ Health Check
+                </button>
+            </div>
+        </div>
+
+        <!-- Clients Table -->
+        <div class="table-container" id="clientsTable" style="display: none;">
+            <h2 style="margin-bottom: 20px;">Active Sessions</h2>
+            <table id="clientsTableContent">
+                <thead>
+                    <tr>
+                        <th>User</th>
+                        <th>Role</th>
+                        <th>Device</th>
+                        <th>Store</th>
+                        <th>Status</th>
+                        <th>Started</th>
+                    </tr>
+                </thead>
+                <tbody id="clientsTableBody">
+                    <tr>
+                        <td colspan="6" class="empty-state">
+                            <div class="empty-state-icon">📭</div>
+                            <div class="empty-state-text">No active sessions</div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Create Session Modal -->
+    <div class="modal" id="createSessionModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Create New Session</h2>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Username</label>
+                    <input type="text" class="form-input" id="sessionUser" placeholder="Enter username" value="demo-user">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Role</label>
+                    <select class="form-select" id="sessionRole">
+                        <option value="Viewer">Viewer</option>
+                        <option value="Cashier">Cashier</option>
+                        <option value="Manager" selected>Manager</option>
+                        <option value="SuperAdmin">Super Admin</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Device (optional)</label>
+                    <input type="text" class="form-input" id="sessionDevice" placeholder="e.g., POS-Terminal-1">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Store (optional)</label>
+                    <input type="text" class="form-input" id="sessionStore" placeholder="e.g., Main Street">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="action-btn secondary" onclick="closeModal('createSessionModal')">Cancel</button>
+                <button class="action-btn primary" onclick="submitCreateSession()">Create Session</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://127.0.0.1:8000';
+        let refreshInterval = null;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            checkHealth();
+            loadClients();
+            
+            // Auto-refresh every 5 seconds
+            refreshInterval = setInterval(() => {
+                checkHealth();
+                loadClients();
+            }, 5000);
+        });
+
+        // Health Check
+        async function checkHealth() {
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                const data = await response.json();
+                
+                document.getElementById('serverStatus').textContent = 'Online';
+                document.getElementById('statusIndicator').className = 'status-indicator online';
+            } catch (error) {
+                document.getElementById('serverStatus').textContent = 'Offline';
+                document.getElementById('statusIndicator').className = 'status-indicator offline';
+            }
+        }
+
+        // Load Clients
+        async function loadClients() {
+            try {
+                const response = await fetch(`${API_BASE}/api/health/clients`);
+                const data = await response.json();
+                
+                const count = data.total || 0;
+                document.getElementById('activeSessions').textContent = count;
+                
+                if (count > 0 && data.clients) {
+                    updateClientsTable(data.clients);
+                }
+            } catch (error) {
+                console.error('Failed to load clients:', error);
+            }
+        }
+
+        // Update Clients Table
+        function updateClientsTable(clients) {
+            const tbody = document.getElementById('clientsTableBody');
+            
+            if (clients.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="empty-state">
+                            <div class="empty-state-icon">📭</div>
+                            <div class="empty-state-text">No active sessions</div>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = clients.map(client => `
+                <tr>
+                    <td><strong>${client.user || 'Unknown'}</strong></td>
+                    <td><span class="badge info">${client.role || 'N/A'}</span></td>
+                    <td>${client.device || '-'}</td>
+                    <td>${client.store || '-'}</td>
+                    <td><span class="badge success">Active</span></td>
+                    <td>${formatDate(client.start_time)}</td>
+                </tr>
+            `).join('');
+
+            document.getElementById('clientsTable').style.display = 'block';
+        }
+
+        // Format Date
+        function formatDate(dateString) {
+            if (!dateString) return '-';
+            const date = new Date(dateString);
+            return date.toLocaleString();
+        }
+
+        // Show Alert
+        function showAlert(message, type = 'info') {
+            const container = document.getElementById('alertContainer');
+            const alert = document.createElement('div');
+            alert.className = `alert ${type} show`;
+            alert.textContent = message;
+            container.appendChild(alert);
+
+            setTimeout(() => {
+                alert.classList.remove('show');
+                setTimeout(() => alert.remove(), 300);
+            }, 4000);
+        }
+
+        // Modal Functions
+        function openModal(modalId) {
+            document.getElementById(modalId).classList.add('show');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('show');
+        }
+
+        // Create Session
+        function createSession() {
+            openModal('createSessionModal');
+        }
+
+        async function submitCreateSession() {
+            const user = document.getElementById('sessionUser').value;
+            const role = document.getElementById('sessionRole').value;
+            const device = document.getElementById('sessionDevice').value;
+            const store = document.getElementById('sessionStore').value;
+
+            if (!user) {
+                showAlert('Username is required', 'error');
+                return;
+            }
+
+            try {
+                const params = new URLSearchParams({
+                    user,
+                    role,
+                    ...(device && { device }),
+                    ...(store && { store })
+                });
+
+                const response = await fetch(`${API_BASE}/api/clients/create?${params}`, {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    showAlert(`Session created: ${data.session_id}`, 'success');
+                    closeModal('createSessionModal');
+                    loadClients();
+                } else {
+                    showAlert('Failed to create session', 'error');
+                }
+            } catch (error) {
+                showAlert('Error creating session: ' + error.message, 'error');
+            }
+        }
+
+        // Navigation Functions
+        function openBlobViewer() {
+            window.open('secure-file-viewer.html', '_blank');
+        }
+
+        function viewClients() {
+            loadClients();
+            document.getElementById('clientsTable').style.display = 'block';
+            document.getElementById('clientsTable').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function viewMetrics() {
+            window.open(`${API_BASE}/metrics`, '_blank');
+        }
+
+        function viewAuditLogs() {
+            showAlert('Audit logs require admin authentication', 'info');
+            setTimeout(() => {
+                window.open(`${API_BASE}/api/ops/audit`, '_blank');
+            }, 1500);
+        }
+
+        function viewApiDocs() {
+            window.open(`${API_BASE}/docs`, '_blank');
+        }
+
+        function refreshStatus() {
+            showAlert('Refreshing status...', 'info');
+            checkHealth();
+            loadClients();
+        }
+
+        async function runHealthCheck() {
+            showAlert('Running health check...', 'info');
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                const data = await response.json();
+                showAlert(`Health check passed: ${data.status}`, 'success');
+            } catch (error) {
+                showAlert('Health check failed', 'error');
+            }
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+        });
+    </script>
+</body>
+</html>

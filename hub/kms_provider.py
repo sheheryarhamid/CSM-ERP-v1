@@ -85,7 +85,7 @@ class AWSKMSProvider:
     """
     
     def __init__(self, key_id: Optional[str] = None, region: Optional[str] = None):
-        self.key_id = key_id or os.getenv("AWS_KMS_KEY_ID")
+        self.key_id: str = key_id or os.getenv("AWS_KMS_KEY_ID") or ""
         self.region = region or os.getenv("AWS_REGION", "us-east-1")
         
         if not self.key_id:
@@ -165,7 +165,7 @@ class AWSKMSProvider:
             self.key_id = target_key
             self._data_key_cache = None  # Clear cache
             logger.info(f"Rotated to AWS KMS key {target_key}")
-            return target_key
+            return self.key_id
         except Exception as e:
             raise KMSError(f"Key rotation failed: {e}")
 

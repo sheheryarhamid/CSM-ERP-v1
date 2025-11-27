@@ -66,3 +66,12 @@ uvicorn==0.38.0
 watchfiles==1.1.1
 wcwidth==0.2.14
 websockets==15.0.1
+
+# Optional: Performance monitoring
+# psutil==5.9.8
+
+# Optional: Cloud KMS providers (install as needed)
+# boto3==1.35.0  # AWS KMS
+# azure-keyvault-secrets==4.8.0  # Azure Key Vault
+# azure-identity==1.19.0  # Azure authentication
+# google-cloud-kms==2.21.0  # GCP KMS
