@@ -6,8 +6,10 @@ import pytest
 from hub.blob_store import LocalEncryptedBlobStore
 
 
-@pytest.mark.skipif(os.getenv("PERF_STREAM") != "1",
-                    reason="Performance streaming tests are disabled by default. Set PERF_STREAM=1 to enable.")
+@pytest.mark.skipif(
+    os.getenv("PERF_STREAM") != "1",
+    reason="Performance streaming tests are disabled by default. Set PERF_STREAM=1 to enable.",
+)
 def test_stream_large_blob(tmp_path):
     """Optional performance test: stream a large synthetic blob via the blob store.
 
@@ -63,4 +65,6 @@ def test_stream_large_blob(tmp_path):
     expected = size_mb * 1024 * 1024
     assert bytes_read == expected, f"expected {expected} bytes, got {bytes_read}"
 
-    print(f"Streamed {bytes_read} bytes in {duration:.2f}s ({bytes_read/duration/1024/1024:.2f} MB/s)")
+    print(
+        f"Streamed {bytes_read} bytes in {duration:.2f}s ({bytes_read/duration/1024/1024:.2f} MB/s)"
+    )

@@ -56,6 +56,7 @@ app.add_middleware(
 
 class Session(BaseModel):
     """Model representing a client session returned by the dev helper."""
+
     session_id: str
     user: str
     role: str
@@ -69,6 +70,7 @@ class Session(BaseModel):
 
 class ClientCreate(BaseModel):
     """Payload model for client creation helper endpoint."""
+
     user: str = "anonymous"
     role: str = "Viewer"
     device: str | None = None

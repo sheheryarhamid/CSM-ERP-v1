@@ -38,14 +38,4 @@ jobs:
 
       - name: Fail on vulnerabilities
         run: |
-          # Fail if pip-audit reports any vulnerabilities
-          python - <<'PY'
-            import json,sys
-            with open('reports/pip_audit_ci.json') as f:
-                j=json.load(f)
-            vulns=[d for d in j.get('dependencies',[]) if d.get('vulns')]
-            if vulns:
-                print('Found vulnerabilities:', vulns)
-                sys.exit(2)
-            print('No vulnerabilities found')
-          PY
+          python -c "import json,sys; f=open('reports/pip_audit_ci.json'); j=json.load(f); f.close(); vulns=[d for d in j.get('dependencies',[]) if d.get('vulns')]; print('Found vulnerabilities:', vulns) if vulns else print('No vulnerabilities found'); sys.exit(2) if vulns else sys.exit(0)"

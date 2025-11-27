@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 @dataclass
 class SessionSpec:
     """Data holder describing the properties required to create a session."""
+
     user: str
     role: str
     device: Optional[str] = None

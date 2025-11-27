@@ -21,4 +21,5 @@ class RateLimiter:
 
     def __init__(self, *args: Any, **kwargs: Any):
         raise RuntimeError("RateLimiter removed; import or use is not supported in this branch.")
+
     # pylint: enable=too-few-public-methods
