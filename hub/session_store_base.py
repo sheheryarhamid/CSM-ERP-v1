@@ -84,8 +84,8 @@ class InMemorySessionStore:
         self.sessions[session_id] = s
         return s
 
-    def list_sessions(self, *, since_seconds: Optional[int] = None) -> List[Dict[str, Any]]:
-        """Return all sessions; `since_seconds` reserved for future filtering."""
+    def list_sessions(self, *, _since_seconds: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Return all sessions; `_since_seconds` reserved for future filtering."""
         return list(self.sessions.values())
 
     def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:

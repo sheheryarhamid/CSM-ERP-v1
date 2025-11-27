@@ -3,10 +3,13 @@
 from .session_store_base import InMemorySessionStore
 
 
-class RedisSessionStore:
-    """Placeholder RedisSessionStore used in cleanup branch (no runtime Redis)."""
-    # Redis-backed session store intentionally removed for runtime simplicity.
-    
+class RedisSessionStore:  # pylint: disable=too-few-public-methods
+    """Placeholder RedisSessionStore used in cleanup branch (no runtime Redis).
+
+    Redis-backed session store intentionally removed for runtime simplicity.
+    This placeholder keeps the import surface stable for other modules
+    but intentionally provides no runtime methods in the cleanup branch.
+    """
 
 
 def create_default_store():

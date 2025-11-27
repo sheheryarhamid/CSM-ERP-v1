@@ -9,6 +9,9 @@ references while signalling removal.
 from typing import Any
 
 
+# The original module exported `RateLimiter`. Keep the symbol as a class
+# but disable the too-few-public-methods check since this is a shim.
+# pylint: disable=too-few-public-methods
 class RateLimiter:
     """Compatibility shim: raising constructor to fail loudly when used.
 
@@ -18,3 +21,4 @@ class RateLimiter:
 
     def __init__(self, *args: Any, **kwargs: Any):
         raise RuntimeError("RateLimiter removed; import or use is not supported in this branch.")
+    # pylint: enable=too-few-public-methods

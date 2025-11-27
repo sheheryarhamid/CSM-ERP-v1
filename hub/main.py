@@ -3,9 +3,7 @@
 import json
 import logging
 import os
-import time
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 import jwt
 from fastapi import FastAPI, Header, HTTPException, Request
@@ -81,6 +79,7 @@ class ClientCreate(BaseModel):
 
 @app.get("/health")
 async def health():
+    """Health check endpoint returning simple status."""
     return {"status": "ok"}
 
 
@@ -166,7 +165,9 @@ async def metrics():
 
 @app.get("/api/ops/audit")
 async def get_audit(request: Request, limit: int = 100):
-    """Return recent audit events. Tries Redis `hub:audit` list first, falls back to `logs/audit.log`.
+    """Return recent audit events.
+
+    Tries Redis `hub:audit` list first, falls back to `logs/audit.log`.
 
     If `ADMIN_TOKEN` or `ADMIN_JWT_SECRET` is configured the endpoint requires admin credentials.
     """

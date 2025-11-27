@@ -8,13 +8,15 @@ Notes about linting: this module contains a small Windows interop type
 assigns attributes outside of Pythonic `__init__` for direct ctypes
 compatibility with the Win32 API. These are documented and are explicitly
 allowed below so static checks do not raise noisy warnings.
+"""
 
 # The following pylint disables are limited and intentional:
 # - invalid-name / attribute-defined-outside-init: for `DATA_BLOB` fields
 # - too-few-public-methods / too-many-branches: pragmatic acceptance for
 #   this small adapter module that contains provider selection logic.
+# These suppressions are intentional and narrowly-scoped to this module.
+# Keep the list compact to avoid long comment lines.
 # pylint: disable=invalid-name,attribute-defined-outside-init,too-few-public-methods,too-many-branches
-"""
 
 import base64
 import binascii
@@ -37,23 +39,32 @@ def _dpapi_unprotect(protected: bytes) -> bytes:
         raise KeyProviderError("DPAPI is only supported on Windows")
 
     # The DATA_BLOB structure names follow the Windows API; disable naming
-    # warnings for this small interop type.
-    # pylint: disable=invalid-name,attribute-defined-outside-init
+    # warnings for this small interop type. Keep the naming-disable scoped
+    # tightly around the structure fields.
+    # pylint: disable=attribute-defined-outside-init
     class DATA_BLOB(ctypes.Structure):
         """Windows DATA_BLOB structure used by CryptUnprotectData."""
 
+        # Field names match the Windows API and must keep this casing.
+        # pylint: disable=invalid-name
         _fields_ = [("cbData", wintypes.DWORD), ("pbData", ctypes.c_void_p)]
+        # pylint: enable=invalid-name
 
-    # pylint: enable=invalid-name,attribute-defined-outside-init
+    # pylint: enable=attribute-defined-outside-init
 
     crypt32 = ctypes.windll.crypt32
     kernel32 = ctypes.windll.kernel32
 
+    # Assigning attributes outside __init__ is required for ctypes structures
+    # when interacting with the Win32 API; scope the disable to this block.
+    # Also allow non-snake-case attribute names in these assignments.
+    # pylint: disable=invalid-name,attribute-defined-outside-init
     in_blob = DATA_BLOB()
     in_blob.cbData = len(protected)
     # separate buffer creation to keep line lengths reasonable
     _buf = ctypes.create_string_buffer(protected)
     in_blob.pbData = ctypes.cast(_buf, ctypes.c_void_p)
+    # pylint: enable=attribute-defined-outside-init
 
     out_blob = DATA_BLOB()
     success = crypt32.CryptUnprotectData(
@@ -63,8 +74,11 @@ def _dpapi_unprotect(protected: bytes) -> bytes:
         raise RuntimeError("DPAPI unprotect failed")
 
     try:
+        # cast buffer pointer to array type and copy bytes
+        # pylint: disable=attribute-defined-outside-init
         buf_ptr = ctypes.cast(out_blob.pbData, ctypes.POINTER(ctypes.c_ubyte * out_blob.cbData))
         return bytes(buf_ptr.contents)
+        # pylint: enable=attribute-defined-outside-init
     finally:
         kernel32.LocalFree(out_blob.pbData)
 

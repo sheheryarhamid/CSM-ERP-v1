@@ -15,10 +15,15 @@ logger = logging.getLogger(__name__)
 
 
 class RedisSessionStore:
-    """A simple Redis-backed session store using JSON blobs. Not highly optimized — suitable for MVP."""
+    """A simple Redis-backed session store using JSON blobs.
+
+    Not highly optimized — suitable for MVP.
+    """
 
     def __init__(self, redis_url: str):
         try:
+            # Local import so runtime doesn't require Redis if not used.
+            # pylint: disable=import-outside-toplevel
             import redis
         except ImportError as e:
             logger.exception("Redis client library not installed: %s", e)
@@ -36,15 +41,25 @@ class RedisSessionStore:
         self.set_key = "hub:sessions"
 
     def _key(self, session_id: str) -> str:
+        """Return the storage key for a session id."""
         return f"{self.prefix}{session_id}"
 
     def _now(self) -> str:
+        """Return current UTC time in ISO format.
+
+        Local import keeps redis client optional for environments that don't
+        need it.
+        """
+        # Local import to avoid requiring Redis in environments that don't need it.
+        # pylint: disable=import-outside-toplevel
         from datetime import datetime, timezone
 
         return datetime.now(timezone.utc).isoformat()
 
     def create_session(self, spec: Any):
         """Create a session from a single spec (dict, dataclass, or model)."""
+        # Local import to avoid adding a global runtime dependency.
+        # pylint: disable=import-outside-toplevel
         import uuid
 
         kw = _spec_to_kwargs(spec)
@@ -66,7 +81,7 @@ class RedisSessionStore:
         self.client.sadd(self.set_key, session_id)
         return s
 
-    def list_sessions(self, *, since_seconds: Optional[int] = None):
+    def list_sessions(self, *, _since_seconds: Optional[int] = None):
         """Return list of sessions stored in Redis (best-effort)."""
         ids = self.client.smembers(self.set_key) or []
         out = []
@@ -99,6 +114,11 @@ class RedisSessionStore:
 
 # Factory to pick backend (Redis or in-memory)
 def create_default_store():
+    """Return the default session store instance.
+
+    If `REDIS_URL` is configured attempt to create a `RedisSessionStore`,
+    otherwise return an `InMemorySessionStore`.
+    """
     redis_url = os.getenv("REDIS_URL")
     if redis_url:
         try:
