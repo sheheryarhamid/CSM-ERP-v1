@@ -34,7 +34,7 @@ def format_bytes(size):
 def get_memory_usage():
     """Get current process memory usage in bytes."""
     try:
-        import psutil
+        import psutil  # type: ignore
 
         process = psutil.Process()
         return process.memory_info().rss
@@ -250,7 +250,7 @@ def main():
 
     # Check for psutil
     try:
-        import psutil
+        import psutil  # type: ignore
 
         print(f"✓ Memory profiling enabled (psutil available)")
     except ImportError:

@@ -22,10 +22,21 @@ Usage:
 
 import os
 import logging
-from typing import Optional, Protocol
+from typing import Optional, Protocol, TYPE_CHECKING
 from abc import ABC, abstractmethod
 
 logger = logging.getLogger(__name__)
+
+
+# Help static analyzers (e.g. Pylance) recognize optional deps without
+# forcing a runtime import. Actual import is done lazily inside the
+# property that initializes the client, so this only runs during
+# type-checking to avoid reportMissingImports errors.
+if TYPE_CHECKING:
+    import boto3  # type: ignore
+    from azure.identity import DefaultAzureCredential  # type: ignore
+    from azure.keyvault.secrets import SecretClient  # type: ignore
+    from google.cloud import kms as gcp_kms  # type: ignore
 
 
 class KMSProvider(Protocol):
@@ -99,7 +110,7 @@ class AWSKMSProvider:
         """Lazy-load boto3 client to avoid import errors if AWS not used."""
         if self._client is None:
             try:
-                import boto3
+                import boto3  # type: ignore
                 self._client = boto3.client('kms', region_name=self.region)
             except ImportError:
                 raise KMSError("boto3 not installed. Install with: pip install boto3")
@@ -205,8 +216,8 @@ class AzureKeyVaultProvider:
         """Lazy-load Azure SDK client."""
         if self._secret_client is None:
             try:
-                from azure.identity import DefaultAzureCredential
-                from azure.keyvault.secrets import SecretClient
+                from azure.identity import DefaultAzureCredential  # type: ignore
+                from azure.keyvault.secrets import SecretClient  # type: ignore
                 
                 credential = DefaultAzureCredential()
                 self._secret_client = SecretClient(
@@ -304,8 +315,8 @@ class GCPKMSProvider:
         """Lazy-load Google Cloud KMS client."""
         if self._client is None:
             try:
-                from google.cloud import kms
-                self._client = kms.KeyManagementServiceClient()
+                from google.cloud.kms_v1 import KeyManagementServiceClient  # type: ignore
+                self._client = KeyManagementServiceClient()
             except ImportError:
                 raise KMSError(
                     "Google Cloud KMS not installed. Install with: "
@@ -334,7 +345,7 @@ class GCPKMSProvider:
             plaintext_key = _os.urandom(32)
             
             # Encrypt it with KMS for storage
-            from google.cloud.kms import EncryptRequest
+            from google.cloud.kms_v1.types import EncryptRequest  # type: ignore
             request = EncryptRequest(
                 name=self.key_path,
                 plaintext=plaintext_key
@@ -352,7 +363,7 @@ class GCPKMSProvider:
     def decrypt_data_key(self, encrypted_key: bytes) -> bytes:
         """Decrypt a previously encrypted data key."""
         try:
-            from google.cloud.kms import DecryptRequest
+            from google.cloud.kms_v1.types import DecryptRequest  # type: ignore
             request = DecryptRequest(
                 name=self.key_path,
                 ciphertext=encrypted_key
@@ -373,7 +384,7 @@ class GCPKMSProvider:
         
         try:
             # Verify key is enabled
-            from google.cloud.kms import GetCryptoKeyRequest
+            from google.cloud.kms_v1.types import GetCryptoKeyRequest  # type: ignore
             request = GetCryptoKeyRequest(name=self.key_path)
             crypto_key = self.client.get_crypto_key(request=request)
             
