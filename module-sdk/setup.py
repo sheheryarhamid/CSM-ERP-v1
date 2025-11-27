@@ -6,4 +6,8 @@ setup(
     description='Module SDK for Central ERP Hub',
     packages=find_packages(),
     include_package_data=True,
+    install_requires=[
+        # required by the validator step in CI
+        'jsonschema>=4.0.0',
+    ],
 )
