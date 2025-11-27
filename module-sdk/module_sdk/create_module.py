@@ -2,8 +2,8 @@
 Usage: python -m module_sdk.create_module --name "My Module" --id com.example.my --out ./modules/my
 """
 import argparse
-from pathlib import Path
 import json
+from pathlib import Path
 
 MANIFEST_TEMPLATE = {
     "name": "My Module",

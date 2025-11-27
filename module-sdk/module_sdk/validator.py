@@ -1,7 +1,8 @@
 import json
 import sys
 from pathlib import Path
-from jsonschema import validate, ValidationError
+
+from jsonschema import ValidationError, validate
 
 SCHEMA_PATH = Path(__file__).resolve().parents[2] / "docs" / "manifests" / "manifest-schema.json"
 

@@ -1,7 +1,8 @@
 import os
 import shutil
-from pathlib import Path
 import struct
+from pathlib import Path
+
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from fastapi.testclient import TestClient
 
@@ -38,6 +39,7 @@ else:
         fh.write(ciphertext)
 
 from hub.main import app
+
 client = TestClient(app)
 
 

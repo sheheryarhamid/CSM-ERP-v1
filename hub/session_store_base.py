@@ -5,9 +5,9 @@ This module provides the canonical in-memory session store used by both
 """
 
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-from dataclasses import dataclass
 
 
 @dataclass
