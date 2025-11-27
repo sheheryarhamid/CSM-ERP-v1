@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure File Viewer - Streaming Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 900px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            color: #444;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        input[type="text"],
+        input[type="password"],
+        input[type="number"] {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus,
+        input[type="password"]:focus,
+        input[type="number"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .progress-container {
+            margin-top: 20px;
+            display: none;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 24px;
+            background: #f0f0f0;
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-box {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 18px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        .log {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 15px;
+        }
+
+        .log-entry {
+            padding: 2px 0;
+        }
+
+        .log-entry.info {
+            color: #4fc3f7;
+        }
+
+        .log-entry.success {
+            color: #81c784;
+        }
+
+        .log-entry.error {
+            color: #e57373;
+        }
+
+        .log-entry.warning {
+            color: #ffb74d;
+        }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            display: none;
+        }
+
+        .alert.info {
+            background: #e3f2fd;
+            color: #1976d2;
+            border-left: 4px solid #1976d2;
+        }
+
+        .alert.error {
+            background: #ffebee;
+            color: #c62828;
+            border-left: 4px solid #c62828;
+        }
+
+        .alert.success {
+            background: #e8f5e9;
+            color: #2e7d32;
+            border-left: 4px solid #2e7d32;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Secure File Viewer</h1>
+        <p class="subtitle">Streaming encrypted blob download with resume support</p>
+
+        <div class="alert" id="alert"></div>
+
+        <!-- Configuration Section -->
+        <div class="section">
+            <div class="section-title">Configuration</div>
+            <div class="input-group">
+                <label for="apiUrl">API Base URL</label>
+                <input type="text" id="apiUrl" value="http://127.0.0.1:8000" placeholder="http://127.0.0.1:8000">
+            </div>
+            <div class="input-group">
+                <label for="authToken">Admin Token (JWT)</label>
+                <input type="password" id="authToken" placeholder="Enter admin JWT token">
+            </div>
+            <div class="input-group">
+                <label for="blobId">Blob ID</label>
+                <input type="text" id="blobId" placeholder="Enter blob ID to stream">
+            </div>
+        </div>
+
+        <!-- Download Options -->
+        <div class="section">
+            <div class="section-title">Download Options</div>
+            <div class="checkbox-group">
+                <input type="checkbox" id="enableResume" checked>
+                <label for="enableResume" style="margin-bottom: 0;">Enable resume support (Range requests)</label>
+            </div>
+            <div class="input-group">
+                <label for="chunkSize">Chunk Size (bytes)</label>
+                <input type="number" id="chunkSize" value="65536" min="1024" max="1048576">
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="section">
+            <div class="button-group">
+                <button class="btn-primary" id="startBtn" onclick="startDownload()">▶ Start Download</button>
+                <button class="btn-secondary" id="pauseBtn" onclick="pauseDownload()" disabled>⏸ Pause</button>
+                <button class="btn-secondary" id="resumeBtn" onclick="resumeDownload()" disabled>▶ Resume</button>
+                <button class="btn-danger" id="cancelBtn" onclick="cancelDownload()" disabled>⏹ Cancel</button>
+            </div>
+        </div>
+
+        <!-- Progress -->
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill">0%</div>
+            </div>
+
+            <div class="stats">
+                <div class="stat-box">
+                    <div class="stat-label">Downloaded</div>
+                    <div class="stat-value" id="downloadedBytes">0 B</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Total Size</div>
+                    <div class="stat-value" id="totalSize">Unknown</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Speed</div>
+                    <div class="stat-value" id="speed">0 KB/s</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Status</div>
+                    <div class="stat-value" id="status">Ready</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Log -->
+        <div class="section">
+            <div class="section-title">Activity Log</div>
+            <div class="log" id="log"></div>
+        </div>
+    </div>
+
+    <script>
+        let abortController = null;
+        let downloadedBytes = 0;
+        let totalBytes = 0;
+        let isPaused = false;
+        let lastUpdateTime = Date.now();
+        let lastDownloadedBytes = 0;
+        let downloadBuffer = [];
+
+        function log(message, type = 'info') {
+            const logEl = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            const timestamp = new Date().toLocaleTimeString();
+            entry.textContent = `[${timestamp}] ${message}`;
+            logEl.appendChild(entry);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        function showAlert(message, type = 'info') {
+            const alertEl = document.getElementById('alert');
+            alertEl.textContent = message;
+            alertEl.className = `alert ${type}`;
+            alertEl.style.display = 'block';
+            setTimeout(() => {
+                alertEl.style.display = 'none';
+            }, 5000);
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        function updateUI() {
+            const progress = totalBytes > 0 ? (downloadedBytes / totalBytes * 100) : 0;
+            document.getElementById('progressFill').style.width = progress + '%';
+            document.getElementById('progressFill').textContent = Math.round(progress) + '%';
+            document.getElementById('downloadedBytes').textContent = formatBytes(downloadedBytes);
+            document.getElementById('totalSize').textContent = totalBytes > 0 ? formatBytes(totalBytes) : 'Unknown';
+
+            // Calculate speed
+            const now = Date.now();
+            const timeDiff = (now - lastUpdateTime) / 1000;
+            if (timeDiff > 0.5) {
+                const bytesDiff = downloadedBytes - lastDownloadedBytes;
+                const speed = bytesDiff / timeDiff;
+                document.getElementById('speed').textContent = formatBytes(speed) + '/s';
+                lastUpdateTime = now;
+                lastDownloadedBytes = downloadedBytes;
+            }
+        }
+
+        function setStatus(status) {
+            document.getElementById('status').textContent = status;
+        }
+
+        function setButtonStates(downloading, paused) {
+            document.getElementById('startBtn').disabled = downloading;
+            document.getElementById('pauseBtn').disabled = !downloading || paused;
+            document.getElementById('resumeBtn').disabled = !paused;
+            document.getElementById('cancelBtn').disabled = !downloading && !paused;
+        }
+
+        async function startDownload() {
+            const apiUrl = document.getElementById('apiUrl').value;
+            const authToken = document.getElementById('authToken').value;
+            const blobId = document.getElementById('blobId').value;
+            const enableResume = document.getElementById('enableResume').checked;
+
+            if (!blobId) {
+                showAlert('Please enter a Blob ID', 'error');
+                return;
+            }
+
+            if (!authToken) {
+                showAlert('Please enter an admin token', 'error');
+                return;
+            }
+
+            // Reset state
+            downloadedBytes = 0;
+            totalBytes = 0;
+            isPaused = false;
+            downloadBuffer = [];
+            abortController = new AbortController();
+
+            document.getElementById('progressContainer').style.display = 'block';
+            setButtonStates(true, false);
+            setStatus('Downloading...');
+
+            log('Starting download...', 'info');
+            log(`Blob ID: ${blobId}`, 'info');
+            log(`Resume support: ${enableResume ? 'enabled' : 'disabled'}`, 'info');
+
+            try {
+                const url = `${apiUrl}/secure/files/${blobId}/stream`;
+                const headers = {
+                    'Authorization': `Bearer ${authToken}`
+                };
+
+                if (enableResume && downloadedBytes > 0) {
+                    headers['Range'] = `bytes=${downloadedBytes}-`;
+                    log(`Resuming from byte ${downloadedBytes}`, 'warning');
+                }
+
+                const response = await fetch(url, {
+                    headers: headers,
+                    signal: abortController.signal
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                // Get total size from Content-Length or Content-Range
+                const contentLength = response.headers.get('Content-Length');
+                const contentRange = response.headers.get('Content-Range');
+
+                if (contentRange) {
+                    const match = contentRange.match(/bytes \d+-\d+\/(\d+)/);
+                    if (match) {
+                        totalBytes = parseInt(match[1]);
+                    }
+                } else if (contentLength) {
+                    totalBytes = parseInt(contentLength);
+                }
+
+                log(`Total size: ${formatBytes(totalBytes)}`, 'success');
+
+                // Stream the response
+                const reader = response.body.getReader();
+                lastUpdateTime = Date.now();
+                lastDownloadedBytes = downloadedBytes;
+
+                while (true) {
+                    if (isPaused) {
+                        log('Download paused', 'warning');
+                        setStatus('Paused');
+                        setButtonStates(true, true);
+                        break;
+                    }
+
+                    const { done, value } = await reader.read();
+
+                    if (done) {
+                        log('Download completed successfully!', 'success');
+                        showAlert('Download completed!', 'success');
+                        setStatus('Completed');
+                        setButtonStates(false, false);
+
+                        // Create download link
+                        const blob = new Blob(downloadBuffer);
+                        const downloadUrl = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = downloadUrl;
+                        a.download = `blob_${blobId}.bin`;
+                        a.click();
+                        URL.revokeObjectURL(downloadUrl);
+
+                        break;
+                    }
+
+                    downloadBuffer.push(value);
+                    downloadedBytes += value.length;
+                    updateUI();
+                }
+
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    log('Download cancelled', 'warning');
+                    showAlert('Download cancelled', 'warning');
+                    setStatus('Cancelled');
+                } else {
+                    log(`Error: ${error.message}`, 'error');
+                    showAlert(`Download failed: ${error.message}`, 'error');
+                    setStatus('Error');
+                }
+                setButtonStates(false, false);
+            }
+        }
+
+        function pauseDownload() {
+            isPaused = true;
+            log('Pausing download...', 'warning');
+        }
+
+        async function resumeDownload() {
+            isPaused = false;
+            log('Resuming download...', 'info');
+            await startDownload();
+        }
+
+        function cancelDownload() {
+            if (abortController) {
+                abortController.abort();
+                abortController = null;
+            }
+            downloadBuffer = [];
+            setButtonStates(false, false);
+        }
+
+        // Initialize
+        log('Secure File Viewer initialized', 'success');
+        log('Ready to download encrypted blobs', 'info');
+    </script>
+</body>
+</html>
