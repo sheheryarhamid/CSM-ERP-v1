@@ -1,0 +1,5 @@
+# Mark installer zips for Git LFS (recommended)
+installer/*.zip filter=lfs diff=lfs merge=lfs -text
+
+# Large wheel directory (optional) - consider LFS or external storage
+installer/wheels/* filter=lfs diff=lfs merge=lfs -text
